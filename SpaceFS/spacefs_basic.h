@@ -30,13 +30,12 @@ typedef uint32_t mode_t;
 typedef struct {
     fp_t fp;
     mode_t mode;
-    uint32_t offset_write;
-    uint32_t offset_read;
+    uint32_t offset;
     spacefs_handle_t *handle;
     size_t drive_nr;
 } fd_t;
 
-static const fd_t INVALID_FP = {-1, 0, 0, 0, NULL, 0};
+static const fd_t INVALID_FP = {-1, 0, 0, NULL, 0};
 
 #define O_RDONLY 0x0001
 #define O_WRONLY (O_RDONLY << 1)
@@ -69,7 +68,7 @@ fd_t spacefs_fopen(spacefs_handle_t *handle, size_t drive_nr, char *filename, mo
  * @param size The length of the data
  * @return error code
  */
-spacefs_status_t spacefs_fwrite(fd_t fd, const uint8_t *data, size_t size);
+spacefs_status_t spacefs_fwrite(fd_t fd, uint8_t *data, size_t size);
 
 /**
  * Reads data from a file
@@ -78,7 +77,14 @@ spacefs_status_t spacefs_fwrite(fd_t fd, const uint8_t *data, size_t size);
  * @param size The length of the data
  * @return error code
  */
-spacefs_status_t spacefs_fread(fd_t fd, const uint8_t *data, size_t size);
+spacefs_status_t spacefs_fread(fd_t fd, uint8_t *data, size_t size);
+
+/**
+ * Get size of file starting from seek
+ * @param fd file descriptor
+ * @return remaining size of file
+ */
+size_t spacefs_ftell(fd_t fd);
 
 #ifdef __cplusplus
 }

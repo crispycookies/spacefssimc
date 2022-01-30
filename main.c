@@ -1,5 +1,7 @@
 #include <stdio.h>
 #include <stdint-gcc.h>
+#include <string.h>
+#include <stdbool.h>
 #include "SpaceFS/Internal/spacefs_internal_api.h"
 #include "SpaceFS/spacefs_basic.h"
 
@@ -52,7 +54,7 @@ spacefs_write(void *low_level_handle, uint32_t address, uint8_t *data, uint32_t 
 
 
 int main() {
-    create_eeprom_mock("test.bin", 512*1024, 'A');
+    create_eeprom_mock("test.bin", 128*64*8, 'A');
 
     spacefs_handle_t handle;
     handle.read = spacefs_read;
@@ -60,8 +62,8 @@ int main() {
     handle.low_level_handle = "test.bin";
     handle.max_file_number = 2;
     handle.max_filename_length = 10;
-    handle.block_count = 1000;
-    handle.block_size = 512;
+    handle.block_count = 128;
+    handle.block_size = 64;
 
     if (spacefs_basic_format(&handle, 0) != SPACEFS_OK) {
         printf("Error formatting!\n");
@@ -77,6 +79,21 @@ int main() {
     if (fd2.fp == -1) {
         printf("Error opening file!\n");
         return 1;
+    }
+
+    uint8_t buffer[200];
+    uint8_t read_buffer[200];
+    memset(buffer, 'X', sizeof buffer);
+    memset(read_buffer, 0, sizeof read_buffer);
+
+    spacefs_status_t write = spacefs_fwrite(fd, buffer, sizeof buffer);
+    if (write != SPACEFS_OK) {
+        while(true);
+    }
+
+    spacefs_status_t read = spacefs_fread(fd, read_buffer, sizeof read_buffer);
+    if (read != SPACEFS_OK) {
+        while(true);
     }
     
     return 0;
