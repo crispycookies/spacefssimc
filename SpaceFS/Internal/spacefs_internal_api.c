@@ -46,6 +46,10 @@ spacefs_status_t spacefs_api_write(spacefs_handle_t *handle, spacefs_address_t *
 spacefs_status_t spacefs_api_read(spacefs_handle_t *handle, spacefs_address_t *address, uint8_t *data, uint32_t length,
                                   size_t drive_nr) {
     spacefs_status_t rc = handle->read(handle->low_level_handle, *address, data, length, drive_nr);
+    uint8_t arr[64];
+    if (length == 64) {
+        memcpy(arr, data, length);
+    }
     (*address) += length;
     return rc;
 }

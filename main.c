@@ -25,13 +25,14 @@ void cleanup_eeprom_mock(const char* name) {
 spacefs_status_t
 spacefs_read(void *low_level_handle, uint32_t address, uint8_t *data, uint32_t length, size_t drive_nr) {
     char *eeprom_mock_name = (char *) low_level_handle;
+
     FILE* f = fopen(eeprom_mock_name, "rb");
     if (f == NULL) {
         printf("Error opening file!\n");
         return SPACEFS_ERROR;
     }
     fseek(f, address, SEEK_SET);
-    fread(data, 1, length, f);
+    fread(data, length, 1, f);
     fclose(f);
     return SPACEFS_OK;
 }
@@ -81,8 +82,9 @@ int main() {
         return 1;
     }
 
-    uint8_t buffer[200];
-    uint8_t read_buffer[200];
+    uint8_t buffer[100];
+    uint8_t read_buffer[100];
+    uint8_t read_buffer2[100];
     memset(buffer, 'X', sizeof buffer);
     memset(read_buffer, 0, sizeof read_buffer);
 
@@ -91,8 +93,19 @@ int main() {
         while(true);
     }
 
+    memset(buffer, 'Y', sizeof buffer);
+    spacefs_status_t write2 = spacefs_fwrite(fd2, buffer, sizeof buffer);
+    if (write2 != SPACEFS_OK) {
+        while(true);
+    }
+
     spacefs_status_t read = spacefs_fread(fd, read_buffer, sizeof read_buffer);
     if (read != SPACEFS_OK) {
+        while(true);
+    }
+
+    spacefs_status_t read2 = spacefs_fread(fd2, read_buffer2, sizeof read_buffer2);
+    if (read2 != SPACEFS_OK) {
         while(true);
     }
     
