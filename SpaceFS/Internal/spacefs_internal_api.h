@@ -27,6 +27,7 @@ typedef uint32_t spacefs_address_t;
 typedef enum {
     SPACEFS_ERROR = 0,
     SPACEFS_OK,
+    SPACEFS_EOF,
     SPACEFS_MISMATCH,
     SPACEFS_MATCH,
     SPACEFS_FILE_EXISTS,

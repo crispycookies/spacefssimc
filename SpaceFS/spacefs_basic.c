@@ -457,10 +457,11 @@ spacefs_address_t get_file_area_begin(spacefs_address_t start) {
  * @param absolute If true, we set the size to size, else we add size
  * @return error code
  */
-spacefs_status_t sfs_update_size(spacefs_handle_t *handle, size_t drive_nr, spacefs_address_t *fb_address, int size, bool absolute) {
+spacefs_status_t
+sfs_update_size(spacefs_handle_t *handle, size_t drive_nr, spacefs_address_t fb_address, int size, bool absolute) {
     file_block_t fb;
-    spacefs_address_t write_address = (*fb_address);
-    spacefs_status_t rc = spacefs_api_read(handle, fb_address, (uint8_t *) &fb, sizeof(file_block_t), drive_nr);
+    spacefs_address_t write_address = fb_address;
+    spacefs_status_t rc = spacefs_api_read(handle, &fb_address, (uint8_t *) &fb, sizeof(file_block_t), drive_nr);
     if (rc != SPACEFS_OK) {
         return rc;
     }
@@ -496,6 +497,7 @@ spacefs_status_t spacefs_fwrite(fd_t fd, uint8_t *data, size_t size) {
     spacefs_address_t fat_address = (file_area_begin + (fd.handle->max_file_number *
                                                         (sizeof(file_block_t) + fd.handle->max_filename_length)));
     spacefs_address_t block_area_begin = get_block_area_begin(fd.handle, fat_address);
+    spacefs_address_t file_idx_address = sfs_get_file_idx_address(fd.handle, &file_area_begin, fd.fp);
 
     size_t block_count_to_use = size / (fd.handle->block_size);
     if (size % (fd.handle->block_size) != 0) {
@@ -543,13 +545,22 @@ spacefs_status_t spacefs_fwrite(fd_t fd, uint8_t *data, size_t size) {
             return rc;
         }
 
+        rc = sfs_update_size(fd.handle, fd.drive_nr, file_idx_address, (int)len, false);
+        if (rc != SPACEFS_OK) {
+            return rc;
+        }
+
         offset += len;
         if (size <= fd.handle->block_size) {
             size = 0;
             len = size;
         } else {
             size -= len;
-            len = fd.handle->block_size;
+            if (size <= fd.handle->block_size) {
+                len = size;
+            } else {
+                len = fd.handle->block_size;
+            }
         }
     }
 
@@ -586,10 +597,13 @@ spacefs_status_t spacefs_fread(fd_t fd, uint8_t *data, size_t size) {
     size_t offset = 0;
     size_t length;
     size_t blocks_to_read;
+    size_t bytes_read = 0;
 
-    if (size <= fb.size) {
-        size = fb.size;
+    if (size + fd.offset > fb.size) {
+       return SPACEFS_EOF;
     }
+
+    size += fd.offset;
 
     blocks_to_read = size / fd.handle->block_size;
     if (size % fd.handle->block_size) {
@@ -602,9 +616,6 @@ spacefs_status_t spacefs_fread(fd_t fd, uint8_t *data, size_t size) {
         length = fd.handle->block_size;
     }
 
-    uint8_t arr[1024];
-    memset(arr, 0, 1024);
-
     for (int i = 0; i < blocks_to_read; i++) {
         block_t bt;
         spacefs_address_t block_addr = sfs_get_block_address(fd.handle, &block_area_begin_address, next_block);
@@ -612,16 +623,27 @@ spacefs_status_t spacefs_fread(fd_t fd, uint8_t *data, size_t size) {
         if (rc != SPACEFS_OK) {
             return rc;
         }
-        rc = spacefs_api_read(fd.handle, &block_addr, &data[offset], length, fd.drive_nr);
-        if (rc != SPACEFS_OK) {
-            return rc;
-        }
 
-        memcpy(arr, &data[offset], length);
+        if (bytes_read + length >= fd.offset) {
+            size_t byte_offset = fd.offset - bytes_read;
+            if (fd.offset < bytes_read) {
+               byte_offset = 0;
+            }
+            size_t bytes_to_read = fd.handle->block_size - byte_offset;
+            if (bytes_to_read > length) {
+                bytes_to_read = length;
+            }
+            block_addr += byte_offset;
+            rc = spacefs_api_read(fd.handle, &block_addr, &data[offset], bytes_to_read, fd.drive_nr);
+            if (rc != SPACEFS_OK) {
+                return rc;
+            }
+            offset += bytes_to_read;
+        }
 
         next_block = bt.next;
         size -= length;
-        offset += length;
+        bytes_read += length;
 
         if (size <= fd.handle->block_size) {
             length = size;
