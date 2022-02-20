@@ -284,7 +284,7 @@ sfs_set_unused_block(spacefs_handle_t *handle, size_t drive_nr, spacefs_address_
         if (fat_entry != 0xFF) {
             size_t fat_idx = get_block_in_byte(fat_entry);
             (*block_nr) = i * 8 + fat_idx + handle->max_file_number;
-            fat_entry |= (1<<fat_idx);
+            fat_entry |= (1 << fat_idx);
             rc = spacefs_api_write_checked(handle, &tmp_address, &fat_entry, 1, drive_nr);
             if (rc != SPACEFS_OK) {
                 return rc;
@@ -374,8 +374,7 @@ sfs_link_list_items(spacefs_handle_t *handle, size_t drive_nr,
         if (rc != SPACEFS_OK) {
             return rc;
         }
-    }
-    else {
+    } else {
         block_t block_prev_read;
         block_prev = sfs_get_block_address(handle, block_area_begin, previous_block);
         block_prev_write = block_prev;
@@ -419,8 +418,7 @@ sfs_link_list_items(spacefs_handle_t *handle, size_t drive_nr,
         if (rc != SPACEFS_OK) {
             return rc;
         }
-    }
-    else {
+    } else {
         block_t block_next_read;
         block_next = sfs_get_block_address(handle, block_area_begin, next_block);
         block_next_write = block_next;
@@ -439,14 +437,46 @@ sfs_link_list_items(spacefs_handle_t *handle, size_t drive_nr,
 }
 
 spacefs_address_t get_block_area_begin(spacefs_handle_t *handle, spacefs_address_t fat_begin_address) {
-    spacefs_address_t fat_add = handle->block_count/8;
+    spacefs_address_t fat_add = handle->block_count / 8;
     if (handle->block_count % 8) {
         fat_add++;
     }
     return fat_add + fat_begin_address;
 }
+
 spacefs_address_t get_file_area_begin(spacefs_address_t start) {
     return start + sizeof(discovery_block_t);
+}
+
+/**
+ * Adds/Sets the size of the file
+ * @param handle The spacefs handle
+ * @param drive_nr The drive nr
+ * @param fb_address The address of the file block
+ * @param size The size to add/set
+ * @param absolute If true, we set the size to size, else we add size
+ * @return error code
+ */
+spacefs_status_t sfs_update_size(spacefs_handle_t *handle, size_t drive_nr, spacefs_address_t *fb_address, int size, bool absolute) {
+    file_block_t fb;
+    spacefs_address_t write_address = (*fb_address);
+    spacefs_status_t rc = spacefs_api_read(handle, fb_address, (uint8_t *) &fb, sizeof(file_block_t), drive_nr);
+    if (rc != SPACEFS_OK) {
+        return rc;
+    }
+    if (absolute) {
+        if (size < 0) {
+            return SPACEFS_INVALID_PARAMETER;
+        }
+        fb.size = size;
+    } else {
+        if (fb.size + size < 0) {
+            return SPACEFS_INVALID_PARAMETER;
+        }
+        fb.size += size;
+    }
+
+    return spacefs_api_write_checked(handle, &write_address, (uint8_t *) &fb, sizeof(file_block_t), drive_nr);
 }
 
 /**
@@ -463,7 +493,8 @@ spacefs_status_t spacefs_fwrite(fd_t fd, uint8_t *data, size_t size) {
     }
 
     spacefs_address_t file_area_begin = get_file_area_begin(0);
-    spacefs_address_t fat_address = (file_area_begin + (fd.handle->max_file_number * (sizeof(file_block_t) + fd.handle->max_filename_length)));
+    spacefs_address_t fat_address = (file_area_begin + (fd.handle->max_file_number *
+                                                        (sizeof(file_block_t) + fd.handle->max_filename_length)));
     spacefs_address_t block_area_begin = get_block_area_begin(fd.handle, fat_address);
 
     size_t block_count_to_use = size / (fd.handle->block_size);
@@ -487,19 +518,27 @@ spacefs_status_t spacefs_fwrite(fd_t fd, uint8_t *data, size_t size) {
         spacefs_address_t tmp_block_area = block_area_begin;
         spacefs_address_t tmp_fat_address = fat_address;
         spacefs_address_t block_address;
-        rc = sfs_set_unused_block(fd.handle,  fd.drive_nr,&tmp_fat_address, &own_block);
+
+        /*
+         * Only required when writing a new block
+         */
+        rc = sfs_set_unused_block(fd.handle, fd.drive_nr, &tmp_fat_address, &own_block);
         if (rc != SPACEFS_BLOCK_FOUND) {
             return rc;
         }
 
-        rc = sfs_link_list_items(fd.handle, fd.drive_nr, &tmp_block_area, &file_area_begin, previous_block, own_block, next_block);
+        /*
+         * Only required when writing a new block
+         */
+        rc = sfs_link_list_items(fd.handle, fd.drive_nr, &tmp_block_area, &file_area_begin, previous_block, own_block,
+                                 next_block);
         if (rc != SPACEFS_OK) {
             return rc;
         }
         previous_block = own_block;
         block_address = sfs_get_block_address(fd.handle, &tmp_block_area, own_block) + sizeof(block_t);
 
-        rc = spacefs_api_write_checked(fd.handle,  &block_address, &data[offset], len, fd.drive_nr);
+        rc = spacefs_api_write_checked(fd.handle, &block_address, &data[offset], len, fd.drive_nr);
         if (rc != SPACEFS_OK) {
             return rc;
         }
@@ -518,16 +557,6 @@ spacefs_status_t spacefs_fwrite(fd_t fd, uint8_t *data, size_t size) {
 }
 
 /**
- * Get size of file starting from seek
- * @param fd file descriptor
- * @return remaining size of file
- */
-size_t spacefs_ftell(fd_t fd) {
-    // TODO
-    return 0;
-}
-
-/**
  * Reads data from a file
  * @param fd The handle to the file
  * @param data The data to read
@@ -543,11 +572,12 @@ spacefs_status_t spacefs_fread(fd_t fd, uint8_t *data, size_t size) {
     // read first block to get first block
     spacefs_address_t file_start_address = get_file_area_begin(0);
     spacefs_address_t file_idx_address = sfs_get_file_idx_address(fd.handle, &file_start_address, fd.fp);
-    spacefs_address_t fat_address = (file_start_address + (fd.handle->max_file_number * (sizeof(file_block_t) + fd.handle->max_filename_length)));
+    spacefs_address_t fat_address = (file_start_address + (fd.handle->max_file_number *
+                                                           (sizeof(file_block_t) + fd.handle->max_filename_length)));
     spacefs_address_t block_area_begin_address = get_block_area_begin(fd.handle, fat_address);
 
     file_block_t fb;
-    rc = spacefs_api_read(fd.handle, &file_idx_address, (uint8_t*)&fb, sizeof fb, fd.drive_nr);
+    rc = spacefs_api_read(fd.handle, &file_idx_address, (uint8_t *) &fb, sizeof fb, fd.drive_nr);
     if (rc != SPACEFS_OK) {
         return rc;
     }
@@ -578,7 +608,7 @@ spacefs_status_t spacefs_fread(fd_t fd, uint8_t *data, size_t size) {
     for (int i = 0; i < blocks_to_read; i++) {
         block_t bt;
         spacefs_address_t block_addr = sfs_get_block_address(fd.handle, &block_area_begin_address, next_block);
-        rc = spacefs_api_read(fd.handle, &block_addr, (uint8_t*)&bt, sizeof bt, fd.fp);
+        rc = spacefs_api_read(fd.handle, &block_addr, (uint8_t *) &bt, sizeof bt, fd.fp);
         if (rc != SPACEFS_OK) {
             return rc;
         }
@@ -600,5 +630,33 @@ spacefs_status_t spacefs_fread(fd_t fd, uint8_t *data, size_t size) {
         }
     }
 
+    return rc;
+}
+
+/**
+ * Get size of file starting from begin
+ * @param fd file descriptor
+ * @param fd returns the size of the file
+ * @return error code
+ */
+spacefs_status_t spacefs_ftell(fd_t fd, size_t *size) {
+    spacefs_status_t rc = spacefs_api_check_handle(fd.handle);
+    if (rc != SPACEFS_OK) {
+        return rc;
+    }
+    if (size == NULL) {
+        return SPACEFS_INVALID_PARAMETER;
+    }
+
+    fp_t idx = fd.fp;
+    spacefs_address_t file_table_address = get_file_area_begin(0);
+    spacefs_address_t file_idx_address = sfs_get_file_idx_address(fd.handle, &file_table_address, idx);
+
+    file_block_t fb;
+    rc = spacefs_api_read(fd.handle, &file_idx_address, (uint8_t *) &fb, sizeof fb, fd.drive_nr);
+    if (rc != SPACEFS_OK) {
+        return rc;
+    }
+    (*size) = fb.size;
     return rc;
 }

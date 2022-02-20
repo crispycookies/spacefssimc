@@ -108,6 +108,12 @@ int main() {
     if (read2 != SPACEFS_OK) {
         while(true);
     }
+
+    size_t size;
+    spacefs_status_t size_status = spacefs_ftell(fd, &size);
+    if (size_status != SPACEFS_OK) {
+        while (true);
+    }
     
     return 0;
 }

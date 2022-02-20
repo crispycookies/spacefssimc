@@ -80,11 +80,12 @@ spacefs_status_t spacefs_fwrite(fd_t fd, uint8_t *data, size_t size);
 spacefs_status_t spacefs_fread(fd_t fd, uint8_t *data, size_t size);
 
 /**
- * Get size of file starting from seek
+ * Get size of file starting from begin
  * @param fd file descriptor
- * @return remaining size of file
+ * @param fd returns the size of the file
+ * @return error code
  */
-size_t spacefs_ftell(fd_t fd);
+spacefs_status_t spacefs_ftell(fd_t fd, size_t *size);
 
 #ifdef __cplusplus
 }
