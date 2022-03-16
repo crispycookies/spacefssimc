@@ -19,11 +19,16 @@
 
 #include <stdint.h>
 #include <stddef.h>
+#include <stdbool.h>
 
 typedef uint32_t spacefs_address_t;
 
 #define BURST_SIZE 128
 
+#define RETURN_PN_ERROR(code) \
+    if (code != SPACEFS_OK) { \
+        return code;           \
+    }
 typedef enum {
     SPACEFS_ERROR = 0,
     SPACEFS_OK,
@@ -42,6 +47,37 @@ typedef enum {
     SPACEFS_INVALID_OPERATION,
     SPACEFS_FS_ERROR
 } spacefs_status_t;
+
+/**
+ * index, 8bit
+ * begin, 32bit
+ * end, 32bit
+ * size, 32bit
+ * nr-blocks, 32 bit,
+ *  * str, n-bit
+ */
+
+typedef struct __attribute__((packed)) {
+    uint8_t index;
+    uint32_t begin;
+    uint32_t end;
+    uint32_t size;
+    uint32_t nr_blocks;
+    uint32_t filename_length;
+} file_block_t;
+
+typedef struct __attribute__((packed)) {
+    uint8_t max_filename_length;
+    uint8_t max_file_number;
+    uint16_t block_size;
+    uint32_t block_count;
+    uint32_t device_size;
+} discovery_block_t;
+
+typedef struct __attribute__((packed)) {
+    uint32_t next;
+    uint32_t prev;
+} block_t;
 
 typedef struct {
     void *low_level_handle;
@@ -128,5 +164,41 @@ spacefs_status_t spacefs_api_memset(spacefs_handle_t *handle, spacefs_address_t 
  * @return error codes
  */
 spacefs_status_t spacefs_api_check_handle(spacefs_handle_t *handle);
+
+/**
+ * Gets the IDX of the next block
+ * @param handle The handle
+ * @param file_area Start Address of the file area
+ * @param block_area Start Address of the block area
+ * @param current_block The current block
+ * @param next_block Returns the next block
+ * @param front_first current->next(true) or current->previous(false)?
+ * @param drive_nr The drive nr
+ * @return error codes
+ */
+spacefs_status_t
+spacefs_api_get_next_block(spacefs_handle_t *handle, spacefs_address_t file_area, spacefs_address_t block_area,
+                           size_t current_block, size_t *next_block, bool front_first, size_t drive_nr);
+
+
+/**
+ * Get the Address of the fp
+ * @param handle The handle
+ * @param file_area_begin The file area start address
+ * @param idx The idx of the file
+ * @return the address calculated
+ */
+spacefs_address_t
+spacefs_api_get_file_address(spacefs_handle_t *handle, const spacefs_address_t *file_area_begin, size_t idx);
+
+/**
+ * Get the Address of the block
+ * @param handle The handle
+ * @param block_area_begin The block area start address
+ * @param idx The idx of the block
+ * @return the address calculated
+ */
+spacefs_address_t
+spacefs_api_get_block_address(spacefs_handle_t *handle, const spacefs_address_t *block_area_begin, size_t idx);
 
 #endif //SPACEFS_INTERNAL_API_H

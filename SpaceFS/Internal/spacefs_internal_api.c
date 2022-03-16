@@ -228,3 +228,71 @@ spacefs_status_t spacefs_api_check_handle(spacefs_handle_t *handle) {
     }
     return SPACEFS_OK;
 }
+
+/**
+ * Gets the IDX of the next block
+ * @param handle The handle
+ * @param file_area Start Address of the file area
+ * @param block_area Start Address of the block area
+ * @param current_block The current block
+ * @param next_block Returns the next block
+ * @param front_first current->next(true) or current->previous(false)?
+ * @param drive_nr The drive nr
+ * @return error codes
+ */
+spacefs_status_t spacefs_api_get_next_block(spacefs_handle_t *handle, spacefs_address_t file_area, spacefs_address_t block_area, size_t current_block, size_t *next_block, bool front_first, size_t drive_nr){
+    spacefs_status_t rc;
+    spacefs_address_t address;
+    if (current_block < handle->max_file_number) {
+        // check the file area
+        file_block_t ft;
+        address = spacefs_api_get_file_address(handle, &file_area, current_block);
+        rc = spacefs_api_read(handle, &address, (uint8_t*)&ft, sizeof ft, drive_nr);
+        if (front_first)  {
+            (*next_block) = ft.begin;
+        } else {
+            (*next_block) = ft.end;
+        }
+    } else {
+        // check the block area
+        block_t bt;
+        address = spacefs_api_get_block_address(handle, &block_area, current_block);
+        rc = spacefs_api_read(handle, &address, (uint8_t*)&bt, sizeof bt, drive_nr);
+        if (front_first)  {
+            (*next_block) = bt.next;
+        } else {
+            (*next_block) = bt.prev;
+        }
+    }
+    return rc;
+}
+
+/**
+ * Get the Address of the fp
+ * @param handle The handle
+ * @param file_area_begin The file are start address
+ * @param idx The idx of the file
+ * @return the address calculated
+ */
+spacefs_address_t
+spacefs_api_get_file_address(spacefs_handle_t *handle, const spacefs_address_t *file_area_begin, size_t idx) {
+    spacefs_address_t file_address = (*file_area_begin) + idx * (handle->max_filename_length + sizeof(file_block_t));
+    return file_address;
+}
+
+/**
+ * Get the Address of the block
+ * @param handle The handle
+ * @param block_area_begin The block area start address
+ * @param idx The idx of the block
+ * @return the address calculated
+ */
+spacefs_address_t
+spacefs_api_get_block_address(spacefs_handle_t *handle, const spacefs_address_t *block_area_begin, size_t idx) {
+    spacefs_address_t real_idx = idx - handle->max_file_number;
+    spacefs_address_t offset = handle->block_size + sizeof(block_t);
+    spacefs_address_t file_address = (*block_area_begin) + real_idx * offset;
+
+    return file_address;
+}
+
