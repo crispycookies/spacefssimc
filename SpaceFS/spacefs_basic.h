@@ -24,24 +24,21 @@ extern "C" {
 
 #include "Internal/spacefs_internal_api.h"
 
-typedef int fp_t;
-typedef uint32_t mode_t;
+typedef enum {
+    READ = 1,
+    WRITE = 2
+} seek_type_t;
 
-typedef struct {
-    fp_t fp;
-    mode_t mode;
-    uint32_t offset;
-    spacefs_handle_t *handle;
-    size_t drive_nr;
-} fd_t;
+#define SPACEFS_SEEK_BEGIN 0
+#define SPACEFS_SEEK_END -1
 
-static const fd_t INVALID_FP = {-1, 0, 0, NULL, 0};
+static const fd_t INVALID_FP = {-1, 0, 0, 0, NULL, 0};
 
-#define O_RDONLY 0x0001
-#define O_WRONLY (O_RDONLY << 1)
-#define O_RDWR   (O_WRONLY << 1)
+#define O_READ   0x0001
+#define O_WRITE  (O_READ << 1)
+#define O_RDWR   (O_READ | O_WRITE)
 #define O_CREAT  (O_RDWR << 1)
-#define O_CREAT_RINGBUFFER (O_APPEND << 1)
+#define O_RING   (O_CREAT << 1)
 
 /**
  * Formats the filesystem for a given drive
@@ -86,6 +83,44 @@ spacefs_status_t spacefs_fread(fd_t fd, uint8_t *data, size_t size);
  * @return error code
  */
 spacefs_status_t spacefs_ftell(fd_t fd, size_t *size);
+
+/**
+ * Seeks to a specific position
+ * @param fd The filedescriptor
+ * @param position The position to seek to
+ * @param read_or_write
+ * @return error code
+ */
+spacefs_status_t spacefs_fseek(fd_t *fd, size_t position, seek_type_t read_or_write);
+
+/**
+ * Creates a ringbuffer WIP
+ * @param fd
+ * @param size
+ * @param filename
+ * @return
+ */
+spacefs_status_t spacefs_create_ringbuffer(fd_t fd, size_t size, char *filename);
+
+/**
+ * Read from Ringbuffer
+ * Hint: You cant read more bytes than the ringbuffer contains
+ * @param fd The file descriptor
+ * @param data The data read
+ * @param size The number of bytes to read
+ * @return error code
+ */
+spacefs_status_t spacefs_read_ringbuffer(fd_t *fd, uint8_t *data, size_t size);
+
+/**
+ * Write to Ringbuffer
+ * Hint: You cant write more bytes than the ringbuffer can hold
+ * @param fd  The file descriptor
+ * @param data  The data to write
+ * @param size  The number of bytes to write
+ * @return error code
+ */
+spacefs_status_t spacefs_write_ringbuffer(fd_t *fd, uint8_t *data, size_t size);
 
 #ifdef __cplusplus
 }

@@ -1,8 +1,6 @@
 #include <stdio.h>
-#include <stdint-gcc.h>
 #include <string.h>
 #include <stdbool.h>
-#include "SpaceFS/Internal/spacefs_internal_api.h"
 #include "SpaceFS/spacefs_basic.h"
 
 void create_eeprom_mock(const char *name, const size_t size_in_bytes, const uint8_t init_val) {
@@ -16,11 +14,6 @@ void create_eeprom_mock(const char *name, const size_t size_in_bytes, const uint
     }
     fclose(f);
 }
-
-void cleanup_eeprom_mock(const char* name) {
-
-}
-
 
 spacefs_status_t
 spacefs_read(void *low_level_handle, uint32_t address, uint8_t *data, uint32_t length, size_t drive_nr) {
@@ -82,9 +75,8 @@ int main() {
         return 1;
     }
 
-    uint8_t buffer[100];
-    uint8_t read_buffer[100];
-    uint8_t read_buffer2[100];
+    uint8_t buffer[300];
+    uint8_t read_buffer[300];
     memset(buffer, 'X', sizeof buffer);
     memset(read_buffer, 0, sizeof read_buffer);
 
@@ -92,28 +84,10 @@ int main() {
     if (write != SPACEFS_OK) {
         while(true);
     }
-
-    memset(buffer, 'Y', sizeof buffer);
-    spacefs_status_t write2 = spacefs_fwrite(fd2, buffer, sizeof buffer);
+    spacefs_status_t write2 = spacefs_fread(fd, read_buffer, sizeof read_buffer);
     if (write2 != SPACEFS_OK) {
         while(true);
     }
 
-    spacefs_status_t read = spacefs_fread(fd, read_buffer, sizeof read_buffer);
-    if (read != SPACEFS_OK) {
-        while(true);
-    }
-
-    spacefs_status_t read2 = spacefs_fread(fd2, read_buffer2, sizeof read_buffer2);
-    if (read2 != SPACEFS_OK) {
-        while(true);
-    }
-
-    size_t size;
-    spacefs_status_t size_status = spacefs_ftell(fd, &size);
-    if (size_status != SPACEFS_OK) {
-        while (true);
-    }
-    
     return 0;
 }

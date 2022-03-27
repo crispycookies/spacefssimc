@@ -17,84 +17,21 @@
 #ifndef SPACEFS_INTERNAL_API_H
 #define SPACEFS_INTERNAL_API_H
 
-#include <stdint.h>
-#include <stddef.h>
-#include <stdbool.h>
+#include "spacefs_base_header.h"
 
-typedef uint32_t spacefs_address_t;
-
-#define BURST_SIZE 128
-
-#define RETURN_PN_ERROR(code) \
-    if (code != SPACEFS_OK) { \
+#define RETURN_CUSTOM_ERROR(code, expected) \
+    if ((code) != (expected)) { \
         return code;           \
     }
-typedef enum {
-    SPACEFS_ERROR = 0,
-    SPACEFS_OK,
-    SPACEFS_EOF,
-    SPACEFS_MISMATCH,
-    SPACEFS_MATCH,
-    SPACEFS_FILE_EXISTS,
-    SPACEFS_FILE_NOT_FOUND,
-    SPACEFS_INVALID_HANDLE,
-    SPACEFS_INVALID_HANDLE_MEMBER,
-    SPACEFS_INVALID_NAME,
-    SPACEFS_HARDWARE_FAULT,
-    SPACEFS_BLOCK_FOUND,
-    SPACEFS_NO_SPACE_LEFT,
-    SPACEFS_INVALID_PARAMETER,
-    SPACEFS_INVALID_OPERATION,
-    SPACEFS_FS_ERROR
-} spacefs_status_t;
 
-/**
- * index, 8bit
- * begin, 32bit
- * end, 32bit
- * size, 32bit
- * nr-blocks, 32 bit,
- *  * str, n-bit
- */
-
-typedef struct __attribute__((packed)) {
-    uint8_t index;
-    uint32_t begin;
-    uint32_t end;
-    uint32_t size;
-    uint32_t nr_blocks;
-    uint32_t filename_length;
-} file_block_t;
-
-typedef struct __attribute__((packed)) {
-    uint8_t max_filename_length;
-    uint8_t max_file_number;
-    uint16_t block_size;
-    uint32_t block_count;
-    uint32_t device_size;
-} discovery_block_t;
-
-typedef struct __attribute__((packed)) {
-    uint32_t next;
-    uint32_t prev;
-} block_t;
+#define RETURN_PN_ERROR(code) RETURN_CUSTOM_ERROR(code, SPACEFS_OK)
 
 typedef struct {
-    void *low_level_handle;
-
-    spacefs_status_t (*read)(void *low_level_handle, uint32_t address, uint8_t *data, uint32_t length, size_t drive_nr);
-
-    spacefs_status_t
-    (*write)(void *low_level_handle, uint32_t address, uint8_t *data, uint32_t length, size_t drive_nr);
-
-    uint8_t max_filename_length;
-    uint8_t max_file_number;
-
-    uint16_t block_size;
-    uint32_t block_count;
-
-    uint32_t device_size;
-} spacefs_handle_t;
+    spacefs_address_t file_area_begin;
+    spacefs_address_t file_idx_address;
+    spacefs_address_t fat_address;
+    spacefs_address_t block_area_begin_address;
+} spacefs_tuple_t;
 
 /**
  * Wrapper for the low level write callback
@@ -200,5 +137,37 @@ spacefs_api_get_file_address(spacefs_handle_t *handle, const spacefs_address_t *
  */
 spacefs_address_t
 spacefs_api_get_block_address(spacefs_handle_t *handle, const spacefs_address_t *block_area_begin, size_t idx);
+
+
+spacefs_address_t spacefs_api_get_file_area_begin(spacefs_address_t start);
+
+spacefs_address_t spacefs_api_get_block_area_begin(spacefs_handle_t *handle, spacefs_address_t fat_begin_address);
+
+/**
+ * Gets the address of the fat
+ * @param handle
+ * @param file_area_begin
+ * @return
+ */
+spacefs_address_t
+spacefs_api_get_fat_address(spacefs_handle_t *handle, const spacefs_address_t *file_area_begin);
+
+spacefs_tuple_t spacefs_api_get_address_tuple(fd_t *handle, spacefs_address_t start_address);
+
+/**
+ * Calculates the maximum size to be written into one block
+ * @param size The desired size to be written
+ * @param fd FD containing the information
+ * @return The maximum size that is allowed to be written
+ */
+size_t spacefs_api_limit_operation_to_block_size(size_t size, fd_t *fd);
+
+/**
+ * Calculates to total number of blocks required for a operation
+ * @param size Size to work with
+ * @param fd Filedescriptor
+ * @return Number of blocks to required
+ */
+size_t spacefs_api_get_block_count(size_t size, fd_t *fd);
 
 #endif //SPACEFS_INTERNAL_API_H

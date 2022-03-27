@@ -296,3 +296,59 @@ spacefs_api_get_block_address(spacefs_handle_t *handle, const spacefs_address_t 
     return file_address;
 }
 
+spacefs_address_t
+spacefs_api_get_fat_address(spacefs_handle_t *handle, const spacefs_address_t *file_area_begin) {
+   return spacefs_api_get_file_address(handle, file_area_begin, handle->max_file_number);
+}
+
+spacefs_address_t spacefs_api_get_file_area_begin(spacefs_address_t start) {
+    return start + sizeof(discovery_block_t);
+}
+
+spacefs_address_t spacefs_api_get_block_area_begin(spacefs_handle_t *handle, spacefs_address_t fat_begin_address) {
+    spacefs_address_t fat_add = handle->block_count / 8;
+    if (handle->block_count % 8) {
+        fat_add++;
+    }
+    return fat_add + fat_begin_address;
+}
+
+spacefs_tuple_t spacefs_api_get_address_tuple(fd_t *fd, spacefs_address_t start_address) {
+    spacefs_tuple_t tuple;
+    tuple.file_area_begin = spacefs_api_get_file_area_begin(0);
+    tuple.fat_address = spacefs_api_get_fat_address(fd->handle, &tuple.file_area_begin);
+    tuple.block_area_begin_address = spacefs_api_get_block_area_begin(fd->handle, tuple.fat_address);
+    tuple.file_idx_address = spacefs_api_get_file_address(fd->handle, &tuple.file_area_begin, fd->fp);
+
+    return tuple;
+}
+
+/**
+ * Calculates the maximum size to be written into one block
+ * @param size The desired size to be written
+ * @param fd FD containing the information
+ * @return The maximum size that is allowed to be written
+ */
+size_t spacefs_api_limit_operation_to_block_size(size_t size, fd_t *fd) {
+    if (size <= fd->handle->block_size) {
+        return size;
+    } else {
+        return fd->handle->block_size;
+    }
+}
+
+/**
+ * Calculates to total number of blocks required for a operation
+ * @param size Size to work with
+ * @param offset Potential offset_read supplied
+ * @param fd Filedescriptor
+ * @return Number of blocks to required
+ */
+size_t spacefs_api_get_block_count(size_t size, fd_t *fd) {
+    size += fd->offset_read;
+    size_t blocks = size / fd->handle->block_size;
+    if (size % fd->handle->block_size) {
+        blocks++;
+    }
+    return blocks;
+}
