@@ -18,6 +18,9 @@
 #include <string.h>
 #include "spacefs_basic.h"
 
+static spacefs_status_t spacefs_read_ringbuffer_internal(fd_t *fd, uint8_t *data, size_t size);
+static spacefs_status_t spacefs_write_ringbuffer_internal(fd_t *fd, uint8_t *data, size_t size);
+
 static spacefs_status_t sfs_write_discovery_block(spacefs_handle_t *handle, size_t drive_nr, uint32_t *address) {
     discovery_block_t discovery_block;
 
@@ -519,7 +522,7 @@ spacefs_status_t spacefs_fwrite(fd_t *fd, uint8_t *data, size_t size) {
     }
 
     if (fd->mode & O_RING) {
-        return spacefs_write_ringbuffer(fd, data, size);
+        return spacefs_write_ringbuffer_internal(fd, data, size);
     } else {
         return spacefs_fwrite_internal(*fd, data, size);
     }
@@ -594,7 +597,7 @@ spacefs_status_t spacefs_fread(fd_t *fd, uint8_t *data, size_t size) {
     }
 
     if (fd->mode & O_RING){
-        return spacefs_read_ringbuffer(fd, data, size);
+        return spacefs_read_ringbuffer_internal(fd, data, size);
     } else {
         return spacefs_fread_internal(*fd, data, size);
     }
@@ -684,15 +687,7 @@ spacefs_status_t spacefs_create_ringbuffer(fd_t fd, size_t size, char *filename)
     return SPACEFS_NO_SPACE_LEFT;
 }
 
-spacefs_status_t spacefs_read_ringbuffer(fd_t *fd, uint8_t *data, size_t size) {
-    if (fd == NULL) {
-        return SPACEFS_INVALID_PARAMETER;
-    }
-
-    if (!(fd->mode & O_RING)) {
-        return SPACEFS_INVALID_OPERATION;
-    }
-
+spacefs_status_t spacefs_read_ringbuffer_internal(fd_t *fd, uint8_t *data, size_t size) {
     size_t max_size;
     spacefs_status_t rc = spacefs_ftell(*fd, &max_size);
     RETURN_PN_ERROR(rc)
@@ -726,10 +721,7 @@ spacefs_status_t spacefs_read_ringbuffer(fd_t *fd, uint8_t *data, size_t size) {
     return SPACEFS_OK;
 }
 
-spacefs_status_t spacefs_write_ringbuffer(fd_t *fd, uint8_t *data, size_t size) {
-    if (fd == NULL) {
-        return SPACEFS_INVALID_PARAMETER;
-    }
+spacefs_status_t spacefs_write_ringbuffer_internal(fd_t *fd, uint8_t *data, size_t size) {
     size_t max_size;
     spacefs_status_t rc = spacefs_ftell(*fd, &max_size);
     RETURN_PN_ERROR(rc)

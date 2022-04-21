@@ -102,26 +102,6 @@ spacefs_status_t spacefs_fseek(fd_t *fd, size_t position, seek_type_t read_or_wr
  */
 spacefs_status_t spacefs_create_ringbuffer(fd_t fd, size_t size, char *filename);
 
-/**
- * Read from Ringbuffer
- * Hint: You cant read more bytes than the ringbuffer contains
- * @param fd The file descriptor
- * @param data The data read
- * @param size The number of bytes to read
- * @return error code
- */
-spacefs_status_t spacefs_read_ringbuffer(fd_t *fd, uint8_t *data, size_t size);
-
-/**
- * Write to Ringbuffer
- * Hint: You cant write more bytes than the ringbuffer can hold
- * @param fd  The file descriptor
- * @param data  The data to write
- * @param size  The number of bytes to write
- * @return error code
- */
-spacefs_status_t spacefs_write_ringbuffer(fd_t *fd, uint8_t *data, size_t size);
-
 #ifdef __cplusplus
 }
 #endif
