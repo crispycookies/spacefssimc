@@ -65,7 +65,7 @@ fd_t spacefs_fopen(spacefs_handle_t *handle, size_t drive_nr, char *filename, mo
  * @param size The length of the data
  * @return error code
  */
-spacefs_status_t spacefs_fwrite(fd_t fd, uint8_t *data, size_t size);
+spacefs_status_t spacefs_fwrite(fd_t* fd, uint8_t *data, size_t size);
 
 /**
  * Reads data from a file
@@ -74,7 +74,7 @@ spacefs_status_t spacefs_fwrite(fd_t fd, uint8_t *data, size_t size);
  * @param size The length of the data
  * @return error code
  */
-spacefs_status_t spacefs_fread(fd_t fd, uint8_t *data, size_t size);
+spacefs_status_t spacefs_fread(fd_t* fd, uint8_t *data, size_t size);
 
 /**
  * Get size of file starting from begin

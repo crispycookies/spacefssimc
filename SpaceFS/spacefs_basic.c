@@ -16,7 +16,6 @@
 
 #include <stdbool.h>
 #include <string.h>
-#include <memory.h>
 #include "spacefs_basic.h"
 
 static spacefs_status_t sfs_write_discovery_block(spacefs_handle_t *handle, size_t drive_nr, uint32_t *address) {
@@ -403,14 +402,7 @@ sfs_update_size(spacefs_handle_t *handle, size_t drive_nr, spacefs_address_t fb_
  * @param size The length of the data
  * @return error code
  */
-spacefs_status_t spacefs_fwrite(fd_t fd, uint8_t *data, size_t size) {
-    spacefs_status_t rc = spacefs_api_check_handle(fd.handle);
-    RETURN_PN_ERROR(rc)
-
-    if (!(fd.mode & O_WRITE)) {
-        return SPACEFS_INVALID_OPERATION;
-    }
-
+static spacefs_status_t spacefs_fwrite_internal(fd_t fd, uint8_t *data, size_t size) {
     spacefs_tuple_t addresses = spacefs_api_get_address_tuple(&fd, 0);
 
     size_t block_count_to_use = (size + fd.offset_read) / (fd.handle->block_size);
@@ -428,7 +420,7 @@ spacefs_status_t spacefs_fwrite(fd_t fd, uint8_t *data, size_t size) {
     size_t previous_file_size;
 
     // In case we append a file we need to know how many bytes were overwritten and how many were appended...
-    rc = spacefs_ftell(fd, &previous_file_size);
+    spacefs_status_t rc = spacefs_ftell(fd, &previous_file_size);
     RETURN_PN_ERROR(rc)
 
     for (int i = 0; i < block_count_to_use; i++) {
@@ -518,6 +510,21 @@ spacefs_status_t spacefs_fwrite(fd_t fd, uint8_t *data, size_t size) {
     return rc;
 }
 
+spacefs_status_t spacefs_fwrite(fd_t *fd, uint8_t *data, size_t size) {
+    spacefs_status_t rc = spacefs_api_check_handle(fd->handle);
+    RETURN_PN_ERROR(rc)
+
+    if (!(fd->mode & O_WRITE)) {
+        return SPACEFS_INVALID_OPERATION;
+    }
+
+    if (fd->mode & O_RING) {
+        return spacefs_write_ringbuffer(fd, data, size);
+    } else {
+        return spacefs_fwrite_internal(*fd, data, size);
+    }
+}
+
 /**
  * Reads data from a file
  * @param fd The handle to the file
@@ -525,18 +532,11 @@ spacefs_status_t spacefs_fwrite(fd_t fd, uint8_t *data, size_t size) {
  * @param size The length of the data
  * @return error code
  */
-spacefs_status_t spacefs_fread(fd_t fd, uint8_t *data, size_t size) {
-    spacefs_status_t rc = spacefs_api_check_handle(fd.handle);
-    RETURN_PN_ERROR(rc)
-
-    if (!(fd.mode & O_READ)) {
-        return SPACEFS_INVALID_OPERATION;
-    }
-
+static spacefs_status_t spacefs_fread_internal(fd_t fd, uint8_t *data, size_t size) {
     spacefs_tuple_t addresses = spacefs_api_get_address_tuple(&fd, 0);
 
     file_block_t fb;
-    rc = spacefs_api_read(fd.handle, &addresses.file_idx_address, (uint8_t *) &fb, sizeof fb, fd.drive_nr);
+    spacefs_status_t rc = spacefs_api_read(fd.handle, &addresses.file_idx_address, (uint8_t *) &fb, sizeof fb, fd.drive_nr);
     RETURN_PN_ERROR(rc)
 
     size_t next_block = fb.begin;
@@ -583,6 +583,21 @@ spacefs_status_t spacefs_fread(fd_t fd, uint8_t *data, size_t size) {
     }
 
     return rc;
+}
+
+spacefs_status_t spacefs_fread(fd_t *fd, uint8_t *data, size_t size) {
+    spacefs_status_t rc = spacefs_api_check_handle(fd->handle);
+    RETURN_PN_ERROR(rc)
+
+    if (!(fd->mode & O_READ)) {
+        return SPACEFS_INVALID_OPERATION;
+    }
+
+    if (fd->mode & O_RING){
+        return spacefs_read_ringbuffer(fd, data, size);
+    } else {
+        return spacefs_fread_internal(*fd, data, size);
+    }
 }
 
 /**
@@ -660,7 +675,7 @@ spacefs_status_t spacefs_create_ringbuffer(fd_t fd, size_t size, char *filename)
             data_to_write = size;
         }
 
-        rc = spacefs_fwrite(fd, buffer, data_to_write);
+        rc = spacefs_fwrite_internal(fd, buffer, data_to_write);
         RETURN_PN_ERROR(rc)
 
         size -= data_to_write;
@@ -687,7 +702,7 @@ spacefs_status_t spacefs_read_ringbuffer(fd_t *fd, uint8_t *data, size_t size) {
     }
 
     if (fd->offset_read + size <= max_size) {
-        rc = spacefs_fread(*fd, data, size);
+        rc = spacefs_fread_internal(*fd, data, size);
         RETURN_PN_ERROR(rc)
 
         rc = spacefs_fseek(fd, fd->offset_read + size, READ);
@@ -696,13 +711,13 @@ spacefs_status_t spacefs_read_ringbuffer(fd_t *fd, uint8_t *data, size_t size) {
         size_t len_of_first_chunk = max_size - fd->offset_read;
         size -= len_of_first_chunk;
 
-        rc = spacefs_fread(*fd, &data[0], len_of_first_chunk);
+        rc = spacefs_fread_internal(*fd, &data[0], len_of_first_chunk);
         RETURN_PN_ERROR(rc)
 
         rc = spacefs_fseek(fd, 0, READ);
         RETURN_PN_ERROR(rc)
 
-        rc = spacefs_fread(*fd, &data[len_of_first_chunk], size);
+        rc = spacefs_fread_internal(*fd, &data[len_of_first_chunk], size);
         RETURN_PN_ERROR(rc)
 
         rc = spacefs_fseek(fd, size, READ);
@@ -724,7 +739,7 @@ spacefs_status_t spacefs_write_ringbuffer(fd_t *fd, uint8_t *data, size_t size) 
     }
 
     if (fd->offset_read + size <= max_size) {
-        rc = spacefs_fwrite(*fd, data, size);
+        rc = spacefs_fwrite_internal(*fd, data, size);
         RETURN_PN_ERROR(rc)
 
         rc = spacefs_fseek(fd, fd->offset_read + size, WRITE);
@@ -733,13 +748,13 @@ spacefs_status_t spacefs_write_ringbuffer(fd_t *fd, uint8_t *data, size_t size) 
         size_t len_of_first_chunk = max_size - fd->offset_read;
         size -= len_of_first_chunk;
 
-        rc = spacefs_fwrite(*fd, &data[0], len_of_first_chunk);
+        rc = spacefs_fwrite_internal(*fd, &data[0], len_of_first_chunk);
         RETURN_PN_ERROR(rc)
 
         rc = spacefs_fseek(fd, 0, WRITE);
         RETURN_PN_ERROR(rc)
 
-        rc = spacefs_fwrite(*fd, &data[len_of_first_chunk], size);
+        rc = spacefs_fwrite_internal(*fd, &data[len_of_first_chunk], size);
         RETURN_PN_ERROR(rc)
 
         rc = spacefs_fseek(fd, size, WRITE);

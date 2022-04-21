@@ -80,11 +80,11 @@ int main() {
     memset(buffer, 'X', sizeof buffer);
     memset(read_buffer, 0, sizeof read_buffer);
 
-    spacefs_status_t write = spacefs_fwrite(fd, buffer, sizeof buffer);
+    spacefs_status_t write = spacefs_fwrite(&fd, buffer, sizeof buffer);
     if (write != SPACEFS_OK) {
         while(true);
     }
-    spacefs_status_t write2 = spacefs_fread(fd, read_buffer, sizeof read_buffer);
+    spacefs_status_t write2 = spacefs_fread(&fd, read_buffer, sizeof read_buffer);
     if (write2 != SPACEFS_OK) {
         while(true);
     }
