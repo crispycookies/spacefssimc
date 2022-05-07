@@ -1,5 +1,5 @@
 /**
- *  Copyright (C) 2021  Tobias Egger
+ *  Copyright (C) 2021  Tobias Egger, Steven Trinkenschuh
  *  This program is free software: you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
  *  the Free Software Foundation, either version 3 of the License, or
@@ -53,13 +53,42 @@ static spacefs_status_t sfs_write_discovery_block(spacefs_handle_t *handle, size
                                      drive_nr);
 }
 
+static uint32_t sfs_calculate_crc_fileblock_no_file(file_block_t *file_block) {
+    uint32_t checksum = crc_32((unsigned char *) (&file_block->size),
+                               sizeof(file_block->size));
+    checksum = append_crc_32(checksum, (unsigned char *) (&file_block->index),
+                             sizeof(file_block->index));
+    checksum = append_crc_32(checksum, (unsigned char *) (&file_block->begin),
+                             sizeof(file_block->begin));
+    checksum = append_crc_32(checksum, (unsigned char *) (&file_block->end),
+                             sizeof(file_block->end));
+    checksum = append_crc_32(checksum, (unsigned char *) (&file_block->size),
+                             sizeof(file_block->size));
+    checksum = append_crc_32(checksum, (unsigned char *) (&file_block->nr_blocks),
+                             sizeof(file_block->nr_blocks));
+    checksum = append_crc_32(checksum, (unsigned char *) (&file_block->filename_length),
+                             sizeof(file_block->filename_length));
+    return checksum;
+}
+
+static uint32_t sfs_calculate_crc_fileblock(file_block_t *file_block, const char *filename) {
+    uint32_t checksum = sfs_calculate_crc_fileblock_no_file(file_block);
+    checksum = append_crc_32(checksum, (unsigned char *) filename, file_block->filename_length);
+
+    return checksum;
+}
+
 static spacefs_status_t
-sfs_write_file_block(spacefs_handle_t *handle, size_t drive_nr, uint32_t *address, size_t idx,
+sfs_write_file_block(spacefs_handle_t *handle, size_t drive_nr, uint32_t *address, size_t idx, const char *filename,
                      size_t filename_length) {
     file_block_t file_block;
+    uint32_t checksum;
+
     memset(&file_block, 0, sizeof(file_block_t));
     file_block.filename_length = filename_length;
     file_block.index = idx;
+
+    file_block.checksum = sfs_calculate_crc_fileblock(&file_block, filename);
 
     return spacefs_api_write_checked(handle, address, (uint8_t *) &file_block, sizeof(file_block_t), drive_nr);
 }
@@ -81,7 +110,7 @@ static spacefs_status_t
 sfs_write_file_table_entry(spacefs_handle_t *handle, size_t drive_nr, uint8_t index, const char *filename,
                            uint32_t filesize,
                            uint32_t *address) {
-    spacefs_status_t rc = sfs_write_file_block(handle, drive_nr, address, index, filesize);
+    spacefs_status_t rc = sfs_write_file_block(handle, drive_nr, address, index, filename, filesize);
     if (rc != SPACEFS_OK) {
         (*address) = (*address) + handle->max_filename_length;
         return rc;
@@ -327,12 +356,27 @@ sfs_link_list_items(spacefs_handle_t *handle, size_t drive_nr,
     // Link previous block
     if (previous_block < handle->max_file_number) {
         file_block_t previous_block_data;
+        uint32_t checksum = 0;
         block_prev = spacefs_api_get_file_address(handle, file_area_begin, previous_block);
         block_prev_write = block_prev;
-        rc = spacefs_api_read(handle, &block_prev, (uint8_t *) &previous_block_data, sizeof(file_block_t), drive_nr);
+        rc = spacefs_api_read_crc(handle, &block_prev, (uint8_t *) &previous_block_data, sizeof(file_block_t), drive_nr,
+                                  &checksum);
         RETURN_PN_ERROR(rc)
 
+        // read filename
+        if (previous_block_data.filename_length >= handle->max_filename_length ||
+            previous_block_data.filename_length >= handle->device_size ||
+            previous_block_data.filename_length >= MAX_OP_LEN) {
+            return SPACEFS_CHECKSUM;
+        }
         previous_block_data.begin = own_block;
+        checksum = append_crc_32(checksum, (uint8_t *) &own_block, sizeof own_block);
+
+        rc = spacefs_api_read_crc_throwaway_data(handle, &block_prev, previous_block_data.filename_length, drive_nr,
+                                                 &checksum);
+        RETURN_PN_ERROR(rc)
+
+        previous_block_data.checksum = checksum;
         rc = spacefs_api_write_checked(handle, &block_prev_write, (uint8_t *) &previous_block_data,
                                        sizeof(file_block_t), drive_nr);
         RETURN_PN_ERROR(rc)
@@ -362,12 +406,28 @@ sfs_link_list_items(spacefs_handle_t *handle, size_t drive_nr,
     // Link next block
     if (next_block < handle->max_file_number) {
         file_block_t next_block_data;
+        uint32_t checksum = 0;
         block_next = spacefs_api_get_file_address(handle, file_area_begin, next_block);
         block_next_write = block_next;
-        rc = spacefs_api_read(handle, &block_next, (uint8_t *) &next_block_data, sizeof(file_block_t), drive_nr);
+        rc = spacefs_api_read_crc(handle, &block_next, (uint8_t *) &next_block_data, sizeof(file_block_t), drive_nr,
+                                  &checksum);
         RETURN_PN_ERROR(rc)
 
+        // read filename
+        if (next_block_data.filename_length >= handle->max_filename_length ||
+            next_block_data.filename_length >= handle->device_size ||
+            next_block_data.filename_length >= MAX_OP_LEN) {
+            return SPACEFS_CHECKSUM;
+        }
+
         next_block_data.end = own_block;
+        checksum = append_crc_32(checksum, (uint8_t *) &own_block, sizeof own_block);
+
+        rc = spacefs_api_read_crc_throwaway_data(handle, &block_prev, next_block_data.filename_length, drive_nr,
+                                                 &checksum);
+        RETURN_PN_ERROR(rc)
+
+        next_block_data.checksum = checksum;
         rc = spacefs_api_write_checked(handle, &block_next_write, (uint8_t *) &next_block_data,
                                        sizeof(file_block_t), drive_nr);
         RETURN_PN_ERROR(rc)
@@ -398,6 +458,7 @@ sfs_link_list_items(spacefs_handle_t *handle, size_t drive_nr,
 spacefs_status_t
 sfs_update_size(spacefs_handle_t *handle, size_t drive_nr, spacefs_address_t fb_address, int size, bool absolute) {
     file_block_t fb;
+    uint32_t checksum;
     spacefs_address_t write_address = fb_address;
     spacefs_status_t rc = spacefs_api_read(handle, &fb_address, (uint8_t *) &fb, sizeof(file_block_t), drive_nr);
     RETURN_PN_ERROR(rc)
@@ -413,6 +474,16 @@ sfs_update_size(spacefs_handle_t *handle, size_t drive_nr, spacefs_address_t fb_
         }
         fb.size += size;
     }
+
+    if (fb.filename_length >= handle->max_filename_length ||
+        fb.filename_length >= handle->device_size ||
+        fb.filename_length >= MAX_OP_LEN) {
+        return SPACEFS_CHECKSUM;
+    }
+
+    checksum = sfs_calculate_crc_fileblock_no_file(&fb);
+    rc = spacefs_api_read_crc_throwaway_data(handle, &fb_address, fb.filename_length, drive_nr, &checksum);
+    RETURN_PN_ERROR(rc);
 
     return spacefs_api_write_checked(handle, &write_address, (uint8_t *) &fb, sizeof(file_block_t), drive_nr);
 }

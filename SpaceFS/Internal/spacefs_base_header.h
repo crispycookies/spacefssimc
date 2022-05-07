@@ -25,6 +25,8 @@ typedef int fp_t;
 typedef uint32_t mode_t;
 
 #define BURST_SIZE 128
+/* Additional Security Measure */
+#define MAX_OP_LEN 10000000
 
 typedef enum {
     SPACEFS_ERROR = 0,
@@ -33,6 +35,7 @@ typedef enum {
     SPACEFS_EOF,
     SPACEFS_MISMATCH,
     SPACEFS_MATCH,
+    SPACEFS_CHECKSUM,
     SPACEFS_FILE_EXISTS,
     SPACEFS_FILE_NOT_FOUND,
     SPACEFS_INVALID_HANDLE,

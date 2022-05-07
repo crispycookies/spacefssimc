@@ -170,4 +170,29 @@ size_t spacefs_api_limit_operation_to_block_size(size_t size, fd_t *fd);
  */
 size_t spacefs_api_get_block_count(size_t size, fd_t *fd);
 
+/**
+ * Reads from memory and calculates a crc32 checksum
+ * @param handle The spacefs handle that contains the low level read callback
+ * @param address The address to read from. Keep in mind that this address is incremented to point to the next address not read
+ * @param data The data we read
+ * @param length The length of the data to read/compare
+ * @param drive_nr The drive number to read from
+ * @return error codes
+ */
+spacefs_status_t
+spacefs_api_read_crc(spacefs_handle_t *handle, spacefs_address_t *address, uint8_t *data, uint32_t length,
+                     size_t drive_nr, uint32_t *checksum);
+
+/**
+ * Reads from memory and calculates a crc32 checksum
+ * @param handle The spacefs handle that contains the low level read callback
+ * @param address The address to read from. Keep in mind that this address is incremented to point to the next address not read
+ * @param length The length of the data to read/compare
+ * @param drive_nr The drive number to read from
+ * @return error codes
+ */
+spacefs_status_t
+spacefs_api_read_crc_throwaway_data(spacefs_handle_t *handle, spacefs_address_t *address, uint32_t length,
+                     size_t drive_nr, uint32_t *checksum);
+
 #endif //SPACEFS_INTERNAL_API_H

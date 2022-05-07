@@ -15,6 +15,7 @@
  */
 
 #include "spacefs_internal_api.h"
+#include "CRC/include/checksum.h"
 
 #include <memory.h>
 
@@ -351,4 +352,58 @@ size_t spacefs_api_get_block_count(size_t size, fd_t *fd) {
         blocks++;
     }
     return blocks;
+}
+
+/**
+ * Reads from memory and calculates a crc32 checksum
+ * @param handle The spacefs handle that contains the low level read callback
+ * @param address The address to read from. Keep in mind that this address is incremented to point to the next address not read
+ * @param data The data we read
+ * @param length The length of the data to read/compare
+ * @param drive_nr The drive number to read from
+ * @return error codes
+ */
+spacefs_status_t
+spacefs_api_read_crc(spacefs_handle_t *handle, spacefs_address_t *address, uint8_t *data, uint32_t length,
+                     size_t drive_nr, uint32_t *checksum) {
+    spacefs_status_t rc = spacefs_api_read(handle, address, data, length, drive_nr);
+    (*checksum) = crc_32((unsigned char*)data, length);
+    return rc;
+}
+
+/**
+ * Reads from memory and calculates a crc32 checksum
+ * @param handle The spacefs handle that contains the low level read callback
+ * @param address The address to read from. Keep in mind that this address is incremented to point to the next address not read
+ * @param length The length of the data to read/compare
+ * @param drive_nr The drive number to read from
+ * @return error codes
+ */
+spacefs_status_t
+spacefs_api_read_crc_throwaway_data(spacefs_handle_t *handle, spacefs_address_t *address, uint32_t length,
+                                    size_t drive_nr, uint32_t *checksum) {
+    uint8_t rechecked[BURST_SIZE];
+    memset(rechecked, 0, BURST_SIZE);
+
+    spacefs_address_t tmp = *address;
+    tmp += length;
+
+    spacefs_status_t rc = SPACEFS_MATCH;
+    uint32_t count = length / sizeof rechecked;
+    uint32_t mod = length % sizeof rechecked;
+
+    for (size_t i = 0; i < count; i++) {
+        rc = spacefs_api_read_crc(handle, address, rechecked, sizeof rechecked,
+                                     drive_nr, checksum);
+        if (rc != SPACEFS_OK) {
+            (*address) = tmp;
+            return rc;
+        }
+    }
+    if (mod != 0) {
+        rc = spacefs_api_read_crc(handle, address, rechecked, mod, drive_nr, checksum);
+    }
+    (*address) = tmp;
+
+    return rc;
 }
