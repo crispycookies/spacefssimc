@@ -62,6 +62,7 @@ typedef struct {
     uint32_t size;
     uint32_t nr_blocks;
     uint32_t filename_length;
+    uint32_t checksum;
 } file_block_t;
 
 typedef struct {
@@ -70,6 +71,7 @@ typedef struct {
     uint16_t block_size;
     uint32_t block_count;
     uint32_t device_size;
+    uint32_t checksum;
 } discovery_block_t;
 
 typedef struct {

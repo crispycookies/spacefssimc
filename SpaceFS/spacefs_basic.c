@@ -16,6 +16,7 @@
 
 #include <stdbool.h>
 #include <string.h>
+#include "Internal/CRC/include/checksum.h"
 #include "spacefs_basic.h"
 
 static spacefs_status_t spacefs_read_ringbuffer_internal(fd_t *fd, uint8_t *data, size_t size);
@@ -23,12 +24,30 @@ static spacefs_status_t spacefs_write_ringbuffer_internal(fd_t *fd, uint8_t *dat
 
 static spacefs_status_t sfs_write_discovery_block(spacefs_handle_t *handle, size_t drive_nr, uint32_t *address) {
     discovery_block_t discovery_block;
+    uint32_t checksum;
 
     discovery_block.max_filename_length = handle->max_filename_length;
     discovery_block.max_file_number = handle->max_file_number;
     discovery_block.block_size = handle->block_size;
     discovery_block.block_count = handle->block_count;
     discovery_block.device_size = handle->device_size;
+
+    checksum = crc_32((unsigned char *) (&discovery_block.max_filename_length),
+                      sizeof(discovery_block.max_filename_length));
+
+    /* I am not proud of this spaghetti code here and everywhere in this FS */
+    /* but I prefer this explicit approach over casting discovery_block_t and subtracting */
+    /* sizeof(discovery_block.checksum) */
+    checksum = append_crc_32(checksum, (unsigned char *) (&discovery_block.max_file_number),
+                             sizeof(discovery_block.max_file_number));
+    checksum = append_crc_32(checksum, (unsigned char *) (&discovery_block.block_size),
+                             sizeof(discovery_block.block_size));
+    checksum = append_crc_32(checksum, (unsigned char *) (&discovery_block.block_count),
+                             sizeof(discovery_block.block_count));
+    checksum = append_crc_32(checksum, (unsigned char *) (&discovery_block.device_size),
+                             sizeof(discovery_block.device_size));
+
+    discovery_block.checksum = checksum;
 
     return spacefs_api_write_checked(handle, address, (uint8_t *) &discovery_block, sizeof(discovery_block_t),
                                      drive_nr);
