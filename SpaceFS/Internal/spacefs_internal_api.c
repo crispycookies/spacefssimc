@@ -15,6 +15,7 @@
  */
 
 #include "spacefs_internal_api.h"
+#include "CRC/include/checksum.h"
 
 #include <memory.h>
 
@@ -240,15 +241,17 @@ spacefs_status_t spacefs_api_check_handle(spacefs_handle_t *handle) {
  * @param drive_nr The drive nr
  * @return error codes
  */
-spacefs_status_t spacefs_api_get_next_block(spacefs_handle_t *handle, spacefs_address_t file_area, spacefs_address_t block_area, size_t current_block, size_t *next_block, bool front_first, size_t drive_nr){
+spacefs_status_t
+spacefs_api_get_next_block(spacefs_handle_t *handle, spacefs_address_t file_area, spacefs_address_t block_area,
+                           size_t current_block, size_t *next_block, bool front_first, size_t drive_nr) {
     spacefs_status_t rc;
     spacefs_address_t address;
     if (current_block < handle->max_file_number) {
         // check the file area
         file_block_t ft;
         address = spacefs_api_get_file_address(handle, &file_area, current_block);
-        rc = spacefs_api_read(handle, &address, (uint8_t*)&ft, sizeof ft, drive_nr);
-        if (front_first)  {
+        rc = spacefs_api_read(handle, &address, (uint8_t *) &ft, sizeof ft, drive_nr);
+        if (front_first) {
             (*next_block) = ft.begin;
         } else {
             (*next_block) = ft.end;
@@ -257,8 +260,8 @@ spacefs_status_t spacefs_api_get_next_block(spacefs_handle_t *handle, spacefs_ad
         // check the block area
         block_t bt;
         address = spacefs_api_get_block_address(handle, &block_area, current_block);
-        rc = spacefs_api_read(handle, &address, (uint8_t*)&bt, sizeof bt, drive_nr);
-        if (front_first)  {
+        rc = spacefs_api_read(handle, &address, (uint8_t *) &bt, sizeof bt, drive_nr);
+        if (front_first) {
             (*next_block) = bt.next;
         } else {
             (*next_block) = bt.prev;
@@ -298,7 +301,7 @@ spacefs_api_get_block_address(spacefs_handle_t *handle, const spacefs_address_t 
 
 spacefs_address_t
 spacefs_api_get_fat_address(spacefs_handle_t *handle, const spacefs_address_t *file_area_begin) {
-   return spacefs_api_get_file_address(handle, file_area_begin, handle->max_file_number);
+    return spacefs_api_get_file_address(handle, file_area_begin, handle->max_file_number);
 }
 
 spacefs_address_t spacefs_api_get_file_area_begin(spacefs_address_t start) {
@@ -351,4 +354,63 @@ size_t spacefs_api_get_block_count(size_t size, fd_t *fd) {
         blocks++;
     }
     return blocks;
+}
+
+/**
+ * Writes to the spacefs device and checks if the written data is correct. Also calculates a checksum.
+ * @param handle The spacefs handle that contains the low level read and write callbacks
+ * @param address The address to write to. Keep in mind that this address is incremented to point to the next address not written
+ * @param data The data to write
+ * @param length The length of the data to read
+ * @param drive_nr The drive number to read from
+ * @param checksum The checksum
+ * @return error codes
+ */
+spacefs_status_t
+spacefs_api_write_chsum(spacefs_handle_t *handle, spacefs_address_t *address, uint8_t *data, uint32_t length,
+                        size_t drive_nr, uint32_t *checksum) {
+    spacefs_status_t rc = spacefs_api_write_checked(handle, address, data, length, drive_nr);
+    RETURN_PN_ERROR(rc);
+    (*checksum) = append_crc_32(*checksum, data, length);
+}
+
+/**
+ * Wrapper for the low level read callback
+ * @param handle The spacefs handle that contains the low level read callback
+ * @param address The address to read from. Keep in mind that this address is incremented to point to the next address not read
+ * @param length The length of the data to read
+ * @param drive_nr The drive number to read from
+ * @return error codes
+ */
+spacefs_status_t
+spacefs_api_read_chsum(spacefs_handle_t *handle, spacefs_address_t *address, uint32_t length, size_t drive_nr,
+                       uint32_t *checksum) {
+    uint8_t rechecked[BURST_SIZE];
+    memset(rechecked, 0, BURST_SIZE);
+
+    spacefs_address_t tmp = *address;
+    tmp += length;
+
+    spacefs_status_t rc = SPACEFS_MATCH;
+    uint32_t count = length / sizeof rechecked;
+    uint32_t mod = length % sizeof rechecked;
+
+    for (size_t i = 0; i < count; i++) {
+        rc = spacefs_api_read(handle, address, rechecked, sizeof rechecked,
+                                     drive_nr);
+        if (rc != SPACEFS_MATCH) {
+            (*address) = tmp;
+            return rc;
+        }
+
+        (*checksum) = append_crc_32(*checksum, rechecked, sizeof rechecked);
+    }
+    if (mod != 0) {
+        rc = spacefs_api_read(handle, address, rechecked, mod,
+                                     drive_nr);
+        (*checksum) = append_crc_32(*checksum, rechecked, sizeof mod);
+    }
+    (*address) = tmp;
+
+    return rc;
 }

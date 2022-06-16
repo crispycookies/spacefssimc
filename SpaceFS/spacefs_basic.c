@@ -18,6 +18,8 @@
 #include <string.h>
 #include "spacefs_basic.h"
 
+#include "Internal/CRC/include/checksum.h"
+
 static spacefs_status_t spacefs_read_ringbuffer_internal(fd_t *fd, uint8_t *data, size_t size);
 static spacefs_status_t spacefs_write_ringbuffer_internal(fd_t *fd, uint8_t *data, size_t size);
 
@@ -398,6 +400,78 @@ sfs_update_size(spacefs_handle_t *handle, size_t drive_nr, spacefs_address_t fb_
     return spacefs_api_write_checked(handle, &write_address, (uint8_t *) &fb, sizeof(file_block_t), drive_nr);
 }
 
+typedef struct crc_val_t {
+    uint32_t crc;
+    spacefs_status_t status;
+};
+
+static struct crc_val_t spacefs_write_crc(spacefs_handle_t *handle, spacefs_address_t *address, uint8_t *data, size_t size, size_t drive_nr, uint32_t crc) {
+    struct crc_val_t retval;
+    retval.status = spacefs_api_write_checked(handle, address, data, size, drive_nr);
+    if (retval.status != SPACEFS_OK) {
+        return retval;
+    }
+
+    retval.crc = append_crc_32(crc, data, size);
+    return retval;
+}
+
+typedef struct {
+    spacefs_status_t rc;
+    uint32_t crc;
+} crc_tuple_t;
+
+static crc_tuple_t get_crc_for_block(spacefs_handle_t *handle, spacefs_address_t block_start_address, size_t drive_nr, block_t *fb){
+    uint8_t buffer[BURST_SIZE];
+    crc_tuple_t tuple;
+    spacefs_status_t rc;
+
+    rc = spacefs_api_read(handle, &block_start_address, (uint8_t*)fb, sizeof(block_t), drive_nr);
+    if (rc != SPACEFS_OK) {
+        tuple.rc = rc;
+        return tuple;
+    }
+
+    uint32_t crc = crc_32((uint8_t*)(&fb->next), sizeof(fb->next));
+    crc = append_crc_32(crc, (uint8_t*)(&fb->prev), sizeof(fb->next));
+
+    size_t size_to_consume = handle->block_size;
+    size_t blocks_to_read = size_to_consume / sizeof(buffer);
+    size_t size_to_read = 0;
+    if (size_to_consume % sizeof(buffer)) {
+        blocks_to_read++;
+    }
+
+    for (size_t i = 0; i < blocks_to_read; i++) {
+        if (size_to_consume < sizeof(buffer)) {
+            size_to_read = size_to_consume;
+        } else {
+            size_to_read = sizeof(buffer);
+        }
+
+        rc = spacefs_api_read(handle, &block_start_address, buffer, sizeof(buffer), drive_nr);
+        if (rc != SPACEFS_OK) {
+            tuple.rc = rc;
+            return tuple;
+        }
+
+
+        crc = append_crc_32(crc, buffer, sizeof(buffer));
+
+        size_to_consume -= size_to_read;
+    }
+    tuple.rc = SPACEFS_OK;
+    tuple.crc = crc;
+    return tuple;
+}
+
+spacefs_status_t spacefs_update_crc(spacefs_handle_t *handle, spacefs_address_t block_start_address, size_t drive_nr, uint32_t crc, block_t *block) {
+    spacefs_status_t rc;
+
+    block->checksum = crc;
+    return spacefs_api_write_checked(handle, &block_start_address, (uint8_t*)block, sizeof(block_t), drive_nr);
+}
+
 /**
  * Writes data to a file
  * @param fd The handle to the file
@@ -437,7 +511,9 @@ static spacefs_status_t spacefs_fwrite_internal(fd_t fd, uint8_t *data, size_t s
                                         fd.drive_nr);
         RETURN_PN_ERROR(rc)
 
+        /* new block */
         if (next_ < fd.handle->max_file_number) {
+            uint32_t block_checksum = 0;
             len = spacefs_api_limit_operation_to_block_size(size, &fd);
 
             /*
@@ -458,8 +534,16 @@ static spacefs_status_t spacefs_fwrite_internal(fd_t fd, uint8_t *data, size_t s
             previous_block = own_block;
             block_address = sfs_get_block_address(fd.handle, &tmp_block_area, own_block) + sizeof(block_t);
 
-            rc = spacefs_api_write_checked(fd.handle, &block_address, &data[bytes_written], len, fd.drive_nr);
+            rc = spacefs_api_write_chsum(fd.handle, &block_address, &data[bytes_written], len, fd.drive_nr, &block_checksum);
             RETURN_PN_ERROR(rc)
+
+            /* Calculate Checksum for remaining block */
+            if (len < fd.handle->block_size) {
+                spacefs_address_t offset = block_address;
+                size_t ch_len = fd.handle->block_size - len;
+                rc = spacefs_api_read_chsum(fd.handle, &offset, ch_len, fd.drive_nr, &block_checksum);
+                RETURN_PN_ERROR(rc);
+            }
 
             rc = sfs_update_size(fd.handle, fd.drive_nr, addresses.file_idx_address, (int) len, false);
             RETURN_PN_ERROR(rc)

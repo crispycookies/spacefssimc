@@ -75,6 +75,7 @@ typedef struct {
 typedef struct {
     uint32_t next;
     uint32_t prev;
+    uint32_t checksum;
 } block_t;
 
 typedef struct {
