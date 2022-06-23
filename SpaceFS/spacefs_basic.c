@@ -327,6 +327,33 @@ sfs_get_block_address(spacefs_handle_t *handle, const spacefs_address_t *block_a
     return file_address;
 }
 
+static uint32_t sfs_calculate_crc_block(block_t *fb) {
+    uint32_t crc = crc_32((unsigned char*)(&fb->prev), sizeof(fb->prev));
+    crc = append_crc_32(crc, (unsigned char*)(&fb->next), sizeof(fb->next));
+    crc = append_crc_32(crc, (unsigned char*)(&fb->data_checksum), sizeof(fb->data_checksum));
+    return crc;
+}
+
+static spacefs_status_t
+sfs_link_block(spacefs_handle_t *handle, size_t drive_nr, spacefs_address_t *block_area_begin, uint32_t block_to_add_to,
+               uint32_t block_to_write_to) {
+    block_t block_prev_read;
+    uint32_t checksum;
+    spacefs_address_t block_prev = spacefs_api_get_block_address(handle, block_area_begin, block_to_write_to);
+    spacefs_address_t block_prev_write = block_prev;
+    spacefs_status_t rc = spacefs_api_read(handle, &block_prev, (uint8_t *) &block_prev_read, sizeof(block_t), drive_nr);
+    RETURN_PN_ERROR(rc)
+
+    block_prev_read.next = block_to_add_to;
+
+    checksum = sfs_calculate_crc_block(&block_prev_read);
+    block_prev_read.checksum = checksum;
+
+    rc = spacefs_api_write_checked(handle, &block_prev_write, (uint8_t *) &block_prev_read, sizeof(block_t),
+                                   drive_nr);
+    RETURN_PN_ERROR(rc)
+}
+
 /**
  * Link double linked list
  * @param handle
@@ -338,11 +365,9 @@ sfs_get_block_address(spacefs_handle_t *handle, const spacefs_address_t *block_a
  * @return
  */
 static spacefs_status_t
-sfs_link_list_items(spacefs_handle_t *handle, size_t drive_nr,
-                    spacefs_address_t *block_area_begin,
-                    spacefs_address_t *file_area_begin,
-                    size_t previous_block,
-                    size_t own_block, size_t next_block) {
+sfs_link_list_items(spacefs_handle_t *handle, size_t drive_nr, spacefs_address_t *block_area_begin,
+                    spacefs_address_t *file_area_begin, size_t previous_block, size_t own_block, size_t next_block,
+                    uint32_t data_checksum) {
     spacefs_status_t rc;
 
     spacefs_address_t block_prev;
@@ -381,17 +406,10 @@ sfs_link_list_items(spacefs_handle_t *handle, size_t drive_nr,
                                        sizeof(file_block_t), drive_nr);
         RETURN_PN_ERROR(rc)
     } else {
-        block_t block_prev_read;
-        block_prev = spacefs_api_get_block_address(handle, block_area_begin, previous_block);
-        block_prev_write = block_prev;
-        rc = spacefs_api_read(handle, &block_prev, (uint8_t *) &block_prev_read, sizeof(block_t), drive_nr);
-        RETURN_PN_ERROR(rc)
-
-        block_prev_read.next = own_block;
-        rc = spacefs_api_write_checked(handle, &block_prev_write, (uint8_t *) &block_prev_read, sizeof(block_t),
-                                       drive_nr);
+        rc = sfs_link_block(handle, drive_nr, block_area_begin, own_block, previous_block);
         RETURN_PN_ERROR(rc)
     }
+    uint32_t crc;
 
     // Link current block
     block_t block_own_read;
@@ -400,7 +418,13 @@ sfs_link_list_items(spacefs_handle_t *handle, size_t drive_nr,
 
     block_own_read.prev = previous_block;
     block_own_read.next = next_block;
-    rc = spacefs_api_write_checked(handle, &block_own_write, (uint8_t *) &block_own_read, sizeof(block_t), drive_nr);
+    block_own_read.data_checksum = data_checksum;
+
+    /* Calculate Checksum */
+    crc = sfs_calculate_crc_block(&block_own_read);
+    block_own_read.checksum = crc;
+
+    rc = spacefs_api_write_checked(handle, &block_own_write, (uint8_t *) &block_own_read, sizeof(block_t), &crc, drive_nr);
     RETURN_PN_ERROR(rc)
 
     // Link next block
@@ -438,7 +462,7 @@ sfs_link_list_items(spacefs_handle_t *handle, size_t drive_nr,
         rc = spacefs_api_read(handle, &block_prev, (uint8_t *) &block_next_read, sizeof(block_t), drive_nr);
         RETURN_PN_ERROR(rc)
 
-        block_next_read.next = own_block;
+        block_next_read.prev = own_block;
         rc = spacefs_api_write_checked(handle, &block_prev_write, (uint8_t *) &block_next_read, sizeof(block_t),
                                        drive_nr);
         RETURN_PN_ERROR(rc)
@@ -455,7 +479,7 @@ sfs_link_list_items(spacefs_handle_t *handle, size_t drive_nr,
  * @param absolute If true, we set the size to size, else we add size
  * @return error code
  */
-spacefs_status_t
+static spacefs_status_t
 sfs_update_size(spacefs_handle_t *handle, size_t drive_nr, spacefs_address_t fb_address, int size, bool absolute) {
     file_block_t fb;
     uint32_t checksum;
@@ -528,6 +552,7 @@ static spacefs_status_t spacefs_fwrite_internal(fd_t fd, uint8_t *data, size_t s
         RETURN_PN_ERROR(rc)
 
         if (next_ < fd.handle->max_file_number) {
+            uint32_t checksum = 0;
             len = spacefs_api_limit_operation_to_block_size(size, &fd);
 
             /*
@@ -542,13 +567,13 @@ static spacefs_status_t spacefs_fwrite_internal(fd_t fd, uint8_t *data, size_t s
             rc = sfs_link_list_items(fd.handle, fd.drive_nr, &tmp_block_area, &addresses.file_area_begin,
                                      previous_block,
                                      own_block,
-                                     next_block);
+                                     next_block, NULL, 0);
             RETURN_PN_ERROR(rc)
 
             previous_block = own_block;
             block_address = sfs_get_block_address(fd.handle, &tmp_block_area, own_block) + sizeof(block_t);
 
-            rc = spacefs_api_write_checked(fd.handle, &block_address, &data[bytes_written], len, fd.drive_nr);
+            rc = spacefs_api_write_checked_crc(fd.handle, &block_address, &data[bytes_written], len, &checksum, fd.drive_nr);
             RETURN_PN_ERROR(rc)
 
             rc = sfs_update_size(fd.handle, fd.drive_nr, addresses.file_idx_address, (int) len, false);
@@ -565,6 +590,7 @@ static spacefs_status_t spacefs_fwrite_internal(fd_t fd, uint8_t *data, size_t s
             bytes_skipped_or_written += len;
             next_ = own_block;
         } else {
+            uint32_t checksum = 0;
             if (bytes_skipped_or_written + fd.handle->block_size > fd.offset_read) {
                 /* We need to write now */
                 int byte_index = (int) fd.offset_read - (int) bytes_skipped_or_written;
@@ -579,8 +605,8 @@ static spacefs_status_t spacefs_fwrite_internal(fd_t fd, uint8_t *data, size_t s
                     }
                     block_address = sfs_get_block_address(fd.handle, &tmp_block_area, next_) + sizeof(block_t);
                     block_address += byte_index;
-                    rc = spacefs_api_write_checked(fd.handle, &block_address, &data[bytes_written], bytes_to_write,
-                                                   fd.drive_nr);
+                    rc = spacefs_api_write_checked_crc(fd.handle, &block_address, &data[bytes_written], bytes_to_write,
+                                                   &checksum, fd.drive_nr);
                     RETURN_PN_ERROR(rc)
                     bytes_written += bytes_to_write;
                     size -= bytes_to_write;

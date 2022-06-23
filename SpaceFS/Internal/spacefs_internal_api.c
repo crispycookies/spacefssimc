@@ -407,3 +407,21 @@ spacefs_api_read_crc_throwaway_data(spacefs_handle_t *handle, spacefs_address_t 
 
     return rc;
 }
+
+/**
+ * Writes to the spacefs device and checks if the written data is correct
+ * @param handle The spacefs handle that contains the low level read and write callbacks
+ * @param address The address to write to. Keep in mind that this address is incremented to point to the next address not written
+ * @param data The data to write
+ * @param length The length of the data to read
+ * @param checksum Checksum
+ * @param drive_nr The drive number to read from
+ * @return error codes
+ */
+spacefs_status_t
+spacefs_api_write_checked_crc(spacefs_handle_t *handle, spacefs_address_t *address, uint8_t *data, uint32_t length, uint32_t *checksum,
+                          size_t drive_nr) {
+    spacefs_status_t rc = spacefs_api_write_checked(handle, address, data, length, drive_nr);
+    append_crc_32(checksum, data, length);
+    return rc;
+}

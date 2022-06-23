@@ -80,6 +80,8 @@ typedef struct {
 typedef struct {
     uint32_t next;
     uint32_t prev;
+    uint32_t checksum;
+    uint32_t data_checksum;
 } block_t;
 
 typedef struct {
