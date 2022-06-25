@@ -57,6 +57,7 @@ spacefs_status_t spacefs_api_write(spacefs_handle_t *handle, spacefs_address_t *
 spacefs_status_t
 spacefs_api_read(spacefs_handle_t *handle, spacefs_address_t *address, uint8_t *data, uint32_t length, size_t drive_nr);
 
+
 /**
  * Reads from memory and checks if the memory matches given data
  * @param handle The spacefs handle that contains the low level read callback
@@ -193,7 +194,7 @@ spacefs_api_read_crc(spacefs_handle_t *handle, spacefs_address_t *address, uint8
  */
 spacefs_status_t
 spacefs_api_read_crc_throwaway_data(spacefs_handle_t *handle, spacefs_address_t *address, uint32_t length,
-                     size_t drive_nr, uint32_t *checksum);
+                                    size_t drive_nr, uint32_t *checksum);
 
 
 /**
@@ -207,7 +208,8 @@ spacefs_api_read_crc_throwaway_data(spacefs_handle_t *handle, spacefs_address_t 
  * @return error codes
  */
 spacefs_status_t
-spacefs_api_write_checked_crc(spacefs_handle_t *handle, spacefs_address_t *address, uint8_t *data, uint32_t length, uint32_t *checksum,
-                          size_t drive_nr);
+spacefs_api_write_checked_crc(spacefs_handle_t *handle, spacefs_address_t *address, uint8_t *data, uint32_t length,
+                              uint32_t *checksum,
+                              size_t drive_nr);
 
 #endif //SPACEFS_INTERNAL_API_H
