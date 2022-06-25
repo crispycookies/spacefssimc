@@ -58,11 +58,16 @@ int main() {
     handle.max_filename_length = 10;
     handle.block_count = 128;
     handle.block_size = 64;
+    handle.device_size = 10000000000;
 
     if (spacefs_basic_format(&handle, 0) != SPACEFS_OK) {
         printf("Error formatting!\n");
         return 1;
     }
+    int c = O_CREAT;
+    int d = O_RDWR;
+    int e = c | d;
+    int f = O_RING;
     fd_t fd = spacefs_fopen(&handle, 0, "test.txt", O_CREAT | O_RDWR);
     if (fd.fp == -1) {
         printf("Error opening file!\n");
