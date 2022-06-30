@@ -367,7 +367,7 @@ spacefs_status_t
 spacefs_api_read_crc(spacefs_handle_t *handle, spacefs_address_t *address, uint8_t *data, uint32_t length,
                      size_t drive_nr, uint32_t *checksum) {
     spacefs_status_t rc = spacefs_api_read(handle, address, data, length, drive_nr);
-    (*checksum) = crc_32((unsigned char*)data, length);
+    (*checksum) = append_crc_32(*checksum, data, length);
     return rc;
 }
 
@@ -422,6 +422,6 @@ spacefs_status_t
 spacefs_api_write_checked_crc(spacefs_handle_t *handle, spacefs_address_t *address, uint8_t *data, uint32_t length, uint32_t *checksum,
                           size_t drive_nr) {
     spacefs_status_t rc = spacefs_api_write_checked(handle, address, data, length, drive_nr);
-    append_crc_32(checksum, data, length);
+    (*checksum) = append_crc_32(*checksum, data, length);
     return rc;
 }

@@ -82,7 +82,7 @@ int main() {
 
     uint8_t buffer[300];
     uint8_t read_buffer[300];
-    memset(buffer, 'X', sizeof buffer);
+    memset(buffer, 'Y', sizeof buffer);
     memset(read_buffer, 0, sizeof read_buffer);
 
     spacefs_status_t write = spacefs_fwrite(&fd, buffer, sizeof buffer);

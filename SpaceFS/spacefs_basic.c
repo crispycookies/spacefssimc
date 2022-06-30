@@ -566,7 +566,7 @@ static spacefs_status_t spacefs_fwrite_internal(fd_t fd, uint8_t *data, size_t s
             rc = sfs_set_unused_block(fd.handle, fd.drive_nr, &tmp_fat_address, &own_block);
             RETURN_CUSTOM_ERROR(rc, SPACEFS_BLOCK_FOUND);
 
-            previous_block = own_block;
+
             block_address = sfs_get_block_address(fd.handle, &tmp_block_area, own_block) + sizeof(block_t);
 
             rc = spacefs_api_write_checked_crc(fd.handle, &block_address, &data[bytes_written], len, &checksum,
@@ -581,6 +581,7 @@ static spacefs_status_t spacefs_fwrite_internal(fd_t fd, uint8_t *data, size_t s
                                      own_block,
                                      next_block, checksum);
             RETURN_PN_ERROR(rc)
+            previous_block = own_block;
 
             rc = sfs_update_size(fd.handle, fd.drive_nr, addresses.file_idx_address, (int) len, false, checksum, false);
             RETURN_PN_ERROR(rc)
@@ -716,7 +717,7 @@ static spacefs_status_t spacefs_fread_internal(fd_t fd, uint8_t *data, size_t si
                 bytes_to_read = length;
             }
 
-            if (bytes_to_read != 0) {
+            if (byte_offset != 0) {
                 rc = spacefs_api_read_crc_throwaway_data(fd.handle, &block_addr, byte_offset, fd.drive_nr, &data_checksum);
                 RETURN_CUSTOM_ERROR(rc, SPACEFS_MATCH)
             }
