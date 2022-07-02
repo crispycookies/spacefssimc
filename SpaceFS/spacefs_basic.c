@@ -665,6 +665,10 @@ spacefs_status_t spacefs_fwrite(fd_t *fd, uint8_t *data, size_t size) {
     }
 }
 
+static bool spacefs_check_crc(mode_t mode) {
+    return mode & O_IGNORE_CRC;
+}
+
 /**
  * Reads data from a file
  * @param fd The handle to the file
@@ -685,6 +689,8 @@ static spacefs_status_t spacefs_fread_internal(fd_t fd, uint8_t *data, size_t si
     size_t length;
     size_t blocks_to_read;
     size_t bytes_read = 0;
+    bool check_crc = spacefs_check_crc(fd.mode);
+    bool crc_error = false;
 
     if (size + fd.offset_read > fb.size) {
         return SPACEFS_EOF;
@@ -704,7 +710,10 @@ static spacefs_status_t spacefs_fread_internal(fd_t fd, uint8_t *data, size_t si
 
         checksum = sfs_calculate_crc_block(&bt);
         if (bt.checksum != checksum) {
-            return SPACEFS_CHECKSUM;
+            crc_error = true;
+            if (check_crc) {
+                return SPACEFS_CHECKSUM;
+            }
         }
 
         if (bytes_read + length >= fd.offset_read) {
@@ -732,7 +741,10 @@ static spacefs_status_t spacefs_fread_internal(fd_t fd, uint8_t *data, size_t si
             }
 
             if (data_checksum != bt.data_checksum) {
-                return SPACEFS_CHECKSUM;
+                crc_error = true;
+                if (check_crc) {
+                    return SPACEFS_CHECKSUM;
+                }
             }
 
             offset += bytes_to_read;
@@ -744,7 +756,9 @@ static spacefs_status_t spacefs_fread_internal(fd_t fd, uint8_t *data, size_t si
 
         length = spacefs_api_limit_operation_to_block_size(size, &fd);
     }
-
+    if (crc_error && rc == SPACEFS_OK) {
+        return SPACEFS_OP_FINISHED_CHECKSUM_ERR;
+    }
     return rc;
 }
 
