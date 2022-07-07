@@ -100,6 +100,7 @@ typedef struct {
     uint32_t block_count;
 
     uint32_t device_size;
+    bool xor_enable;
 } spacefs_handle_t;
 
 typedef struct {
