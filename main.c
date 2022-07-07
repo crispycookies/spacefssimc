@@ -23,7 +23,8 @@ void create_eeprom_mock(const char *name, const size_t size_in_bytes, const uint
 
 spacefs_status_t
 spacefs_read(void *low_level_handle, uint32_t address, uint8_t *data, uint32_t length, size_t drive_nr) {
-    char *eeprom_mock_name = (char *) (low_level_handle + (drive_nr * sizeof (eeproms[0])));
+    char eeprom_mock_name[sizeof eeproms[0]];
+    memcpy(eeprom_mock_name, low_level_handle + (drive_nr * sizeof (eeproms[0])), sizeof(eeprom_mock_name));
     FILE* f = fopen(eeprom_mock_name, "rb");
     if (f == NULL) {
         printf("Error opening file!\n");
@@ -37,7 +38,8 @@ spacefs_read(void *low_level_handle, uint32_t address, uint8_t *data, uint32_t l
 
 spacefs_status_t
 spacefs_write(void *low_level_handle, uint32_t address, uint8_t *data, uint32_t length, size_t drive_nr) {
-    char *eeprom_mock_name = (char *) (low_level_handle + (drive_nr * sizeof (eeproms[0])));
+    char eeprom_mock_name[sizeof eeproms[0]];
+    memcpy(eeprom_mock_name, low_level_handle + (drive_nr * sizeof (eeproms[0])), sizeof(eeprom_mock_name));
     FILE* f = fopen(eeprom_mock_name, "rb+");
     if (f == NULL) {
         printf("Error opening file!\n");
@@ -53,9 +55,9 @@ spacefs_write(void *low_level_handle, uint32_t address, uint8_t *data, uint32_t 
 
 
 int main() {
-    create_eeprom_mock(eeproms[0], 128*64*8, 'A');
-    create_eeprom_mock(eeproms[1], 128*64*8, 'A');
-    create_eeprom_mock(eeproms[2], 128*64*8, 'A');
+    create_eeprom_mock("test_1.bin", 128*64*8, 'A');
+    create_eeprom_mock("test_2.bin", 128*64*8, 'A');
+    create_eeprom_mock("test_3.bin", 128*64*8, 'A');
 
     spacefs_handle_t handle;
     handle.read = spacefs_read;
@@ -68,7 +70,11 @@ int main() {
     handle.device_size = 1410065408;
 
     if (spacefs_basic_format(&handle, 0) != SPACEFS_OK) {
-        printf("Error formatting!\n");
+        printf("Error formatting EEPROM 0!\n");
+        return 1;
+    }
+    if (spacefs_basic_format(&handle, 1) != SPACEFS_OK) {
+        printf("Error formatting EEPROM 1!\n");
         return 1;
     }
     int c = O_CREAT;
@@ -81,7 +87,7 @@ int main() {
         return 1;
     }
 
-    fd_t fd2 = spacefs_fopen(&handle, 0, "test2.txt", O_CREAT | O_RDWR);
+    fd_t fd2 = spacefs_fopen(&handle, 1, "test2.txt", O_CREAT | O_RDWR);
     if (fd2.fp == -1) {
         printf("Error opening file!\n");
         return 1;
