@@ -3,6 +3,12 @@
 #include <stdbool.h>
 #include "SpaceFS/spacefs_basic.h"
 
+static char eeproms[3][10] = {
+        "test_1.bin",
+        "test_2.bin",
+        "test_3.bin"
+};
+
 void create_eeprom_mock(const char *name, const size_t size_in_bytes, const uint8_t init_val) {
     FILE *f = fopen(name, "wb");
     if (f == NULL) {
@@ -17,8 +23,7 @@ void create_eeprom_mock(const char *name, const size_t size_in_bytes, const uint
 
 spacefs_status_t
 spacefs_read(void *low_level_handle, uint32_t address, uint8_t *data, uint32_t length, size_t drive_nr) {
-    char *eeprom_mock_name = (char *) low_level_handle;
-
+    char *eeprom_mock_name = (char *) (low_level_handle + (drive_nr * sizeof (eeproms[0])));
     FILE* f = fopen(eeprom_mock_name, "rb");
     if (f == NULL) {
         printf("Error opening file!\n");
@@ -32,7 +37,7 @@ spacefs_read(void *low_level_handle, uint32_t address, uint8_t *data, uint32_t l
 
 spacefs_status_t
 spacefs_write(void *low_level_handle, uint32_t address, uint8_t *data, uint32_t length, size_t drive_nr) {
-    char *eeprom_mock_name = (char *) low_level_handle;
+    char *eeprom_mock_name = (char *) (low_level_handle + (drive_nr * sizeof (eeproms[0])));
     FILE* f = fopen(eeprom_mock_name, "rb+");
     if (f == NULL) {
         printf("Error opening file!\n");
@@ -48,17 +53,19 @@ spacefs_write(void *low_level_handle, uint32_t address, uint8_t *data, uint32_t 
 
 
 int main() {
-    create_eeprom_mock("test.bin", 128*64*8, 'A');
+    create_eeprom_mock(eeproms[0], 128*64*8, 'A');
+    create_eeprom_mock(eeproms[1], 128*64*8, 'A');
+    create_eeprom_mock(eeproms[2], 128*64*8, 'A');
 
     spacefs_handle_t handle;
     handle.read = spacefs_read;
     handle.write = spacefs_write;
-    handle.low_level_handle = "test.bin";
+    handle.low_level_handle = eeproms;
     handle.max_file_number = 2;
     handle.max_filename_length = 10;
     handle.block_count = 128;
     handle.block_size = 64;
-    handle.device_size = 10000000000;
+    handle.device_size = 1410065408;
 
     if (spacefs_basic_format(&handle, 0) != SPACEFS_OK) {
         printf("Error formatting!\n");
