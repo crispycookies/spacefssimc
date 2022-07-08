@@ -103,6 +103,12 @@ spacefs_status_t spacefs_fseek(fd_t *fd, size_t position, seek_type_t read_or_wr
  */
 spacefs_status_t spacefs_create_ringbuffer(fd_t fd, size_t size, char *filename);
 
+/**
+ * @brief Verify the filesystem integrity
+ * @param fd file descriptor
+ */
+spacefs_status_t spacefs_verify_integrity(spacefs_handle_t *handle, size_t drive_nr);
+
 #ifdef __cplusplus
 }
 #endif

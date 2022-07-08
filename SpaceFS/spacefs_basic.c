@@ -23,6 +23,25 @@ static spacefs_status_t spacefs_read_ringbuffer_internal(fd_t *fd, uint8_t *data
 
 static spacefs_status_t spacefs_write_ringbuffer_internal(fd_t *fd, uint8_t *data, size_t size);
 
+static void sfs_calculate_discovery_block_crc(discovery_block_t *discovery_block) {
+    uint32_t checksum = crc_32((unsigned char *) (&discovery_block->max_filename_length),
+                      sizeof(discovery_block->max_filename_length));
+
+    /* I am not proud of this spaghetti code here and everywhere in this FS */
+    /* but I prefer this explicit approach over casting discovery_block_t and subtracting */
+    /* sizeof(discovery_block.checksum) */
+    checksum = append_crc_32(checksum, (unsigned char *) (&discovery_block->max_file_number),
+                             sizeof(discovery_block->max_file_number));
+    checksum = append_crc_32(checksum, (unsigned char *) (&discovery_block->block_size),
+                             sizeof(discovery_block->block_size));
+    checksum = append_crc_32(checksum, (unsigned char *) (&discovery_block->block_count),
+                             sizeof(discovery_block->block_count));
+    checksum = append_crc_32(checksum, (unsigned char *) (&discovery_block->device_size),
+                             sizeof(discovery_block->device_size));
+
+    discovery_block->checksum = checksum;
+}
+
 static spacefs_status_t sfs_write_discovery_block(spacefs_handle_t *handle, size_t drive_nr, uint32_t *address) {
     discovery_block_t discovery_block;
     uint32_t checksum;
@@ -33,22 +52,7 @@ static spacefs_status_t sfs_write_discovery_block(spacefs_handle_t *handle, size
     discovery_block.block_count = handle->block_count;
     discovery_block.device_size = handle->device_size;
 
-    checksum = crc_32((unsigned char *) (&discovery_block.max_filename_length),
-                      sizeof(discovery_block.max_filename_length));
-
-    /* I am not proud of this spaghetti code here and everywhere in this FS */
-    /* but I prefer this explicit approach over casting discovery_block_t and subtracting */
-    /* sizeof(discovery_block.checksum) */
-    checksum = append_crc_32(checksum, (unsigned char *) (&discovery_block.max_file_number),
-                             sizeof(discovery_block.max_file_number));
-    checksum = append_crc_32(checksum, (unsigned char *) (&discovery_block.block_size),
-                             sizeof(discovery_block.block_size));
-    checksum = append_crc_32(checksum, (unsigned char *) (&discovery_block.block_count),
-                             sizeof(discovery_block.block_count));
-    checksum = append_crc_32(checksum, (unsigned char *) (&discovery_block.device_size),
-                             sizeof(discovery_block.device_size));
-
-    discovery_block.checksum = checksum;
+    sfs_calculate_discovery_block_crc(&discovery_block);
 
     return spacefs_api_write_checked(handle, address, (uint8_t *) &discovery_block, sizeof(discovery_block_t),
                                      drive_nr);
@@ -929,3 +933,23 @@ spacefs_status_t spacefs_write_ringbuffer_internal(fd_t *fd, uint8_t *data, size
     return SPACEFS_OK;
 }
 
+/**
+ * @brief Verify the filesystem integrity
+ * @param fd file descriptor
+ */
+spacefs_status_t spacefs_verify_integrity(spacefs_handle_t *handle, size_t drive_nr) {
+    discovery_block_t dt;
+    spacefs_address_t address = 0;
+    uint32_t crc = 0;
+    spacefs_status_t rc = spacefs_api_check_handle(handle);
+    RETURN_PN_ERROR(rc)
+
+    rc = spacefs_api_read(handle, &address, (uint8_t*)&dt, sizeof(dt), drive_nr);
+    RETURN_PN_ERROR(rc);
+
+    crc = dt.checksum;
+
+    sfs_calculate_discovery_block_crc(&dt);
+
+    return crc == dt.checksum ? SPACEFS_OK : SPACEFS_CHECKSUM;
+}
