@@ -318,7 +318,7 @@ sfs_unset_used_block(spacefs_handle_t *handle, size_t drive_nr, spacefs_address_
     RETURN_PN_ERROR(rc)
 
     fat_entry &= ~(1 << fat_entry_shift);
-    rc = spacefs_api_write(handle, &fat_entry_address_wb, &fat_entry, 1, drive_nr);
+    rc = spacefs_api_write_checked(handle, &fat_entry_address_wb, &fat_entry, 1, drive_nr);
 
     return rc;
 }

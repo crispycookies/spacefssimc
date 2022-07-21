@@ -27,6 +27,8 @@
  * @param length The length of the data to write
  * @param drive_nr The drive number to write to
  * @return error codes
+ *
+ * @deprecated Please use spacefs_api_write_checked instead
  */
 spacefs_status_t spacefs_api_write(spacefs_handle_t *handle, spacefs_address_t *address, uint8_t *data, uint32_t length,
                                    size_t drive_nr) {
@@ -121,7 +123,10 @@ sfs_helper_checked_write(spacefs_handle_t *handle, spacefs_address_t *address, u
     if (rc != SPACEFS_OK) {
         return rc;
     }
-    rc = sfs_helper_checked_read(handle, &read_address, tx, rx, length, drive_nr);
+
+    if (handle->readback_enable) {
+        rc = sfs_helper_checked_read(handle, &read_address, tx, rx, length, drive_nr);
+    }
 
     if (rc == SPACEFS_MATCH) {
         rc = SPACEFS_OK;
@@ -130,7 +135,7 @@ sfs_helper_checked_write(spacefs_handle_t *handle, spacefs_address_t *address, u
 }
 
 /**
- * Writes to the spacefs device and checks if the written data is correct
+ * Writes to the spacefs device and checks if the written data is correct (if desired)
  * @param handle The spacefs handle that contains the low level read and write callbacks
  * @param address The address to write to. Keep in mind that this address is incremented to point to the next address not written
  * @param data The data to write

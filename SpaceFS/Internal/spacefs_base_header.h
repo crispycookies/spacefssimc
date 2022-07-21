@@ -101,6 +101,7 @@ typedef struct {
 
     uint32_t device_size;
     bool xor_enable;
+    bool readback_enable;
 } spacefs_handle_t;
 
 typedef struct {

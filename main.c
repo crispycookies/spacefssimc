@@ -69,6 +69,7 @@ int main() {
     handle.block_size = 64;
     handle.device_size = 1410065408;
     handle.xor_enable = true;
+    handle.readback_enable = true;
 
     if (spacefs_basic_format(&handle, 0) != SPACEFS_OK) {
         printf("Error formatting EEPROM 0!\n");
