@@ -146,6 +146,10 @@ sfs_helper_checked_write(spacefs_handle_t *handle, spacefs_address_t *address, u
 spacefs_status_t
 spacefs_api_write_checked(spacefs_handle_t *handle, spacefs_address_t *address, uint8_t *data, uint32_t length,
                           size_t drive_nr) {
+    // TODO here
+    spacefs_address_t other_eeprom = *address;
+    spacefs_address_t backup_eeprom = *address;
+
     uint8_t rechecked[BURST_SIZE];
     memset(rechecked, 0, BURST_SIZE);
 
@@ -159,6 +163,8 @@ spacefs_api_write_checked(spacefs_handle_t *handle, spacefs_address_t *address, 
     for (size_t i = 0; i < count; i++) {
         rc = sfs_helper_checked_write(handle, address, rechecked, &data[i * sizeof rechecked], sizeof rechecked,
                                       drive_nr);
+        // TODO drive nr
+        rc = spacefs_api_read(handle, &other_eeprom, rechecked, sizeof rechecked, drive_nr);
         if (rc != SPACEFS_OK) {
             (*address) = tmp;
             return rc;
