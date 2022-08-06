@@ -33,6 +33,12 @@ typedef struct {
     spacefs_address_t block_area_begin_address;
 } spacefs_tuple_t;
 
+typedef enum {
+    backup = 0,
+    left = 1,
+    right = 2
+} spacefs_drive_idx_t;
+
 /**
  * Wrapper for the low level write callback
  * @param handle The spacefs handle that contains the low level write callback
@@ -211,5 +217,33 @@ spacefs_status_t
 spacefs_api_write_checked_crc(spacefs_handle_t *handle, spacefs_address_t *address, uint8_t *data, uint32_t length,
                               uint32_t *checksum,
                               size_t drive_nr);
+
+/**
+ * Returns the index of the other eeprom in the eeprom tuple (when xor=enabled)
+ * @param drive_nr Index of the current eeprom
+ * @return index of the other eeprom to write to
+ */
+size_t spacefs_api_get_other_drive(size_t drive_nr);
+
+/**
+ * Is the drive specified the right writing (non-backup) drive
+ * @param drive_nr Specified drive
+ * @return true if it is the right one
+ */
+bool spacefs_api_is_right_drive(size_t drive_nr);
+
+/**
+ * Is the drive specified the left writing (non-backup) drive
+ * @param drive_nr Specified drive
+ * @return true if it is the left one
+ */
+bool spacefs_api_is_left_drive(size_t drive_nr);
+
+/**
+ * Is the drive specified the backup drive
+ * @param drive_nr Specified drive
+ * @return true if it is the backup drive
+ */
+bool spacefs_api_is_backup_drive(size_t drive_nr);
 
 #endif //SPACEFS_INTERNAL_API_H

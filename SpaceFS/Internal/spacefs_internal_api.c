@@ -430,3 +430,51 @@ spacefs_api_write_checked_crc(spacefs_handle_t *handle, spacefs_address_t *addre
     (*checksum) = append_crc_32(*checksum, data, length);
     return rc;
 }
+
+static bool spacefs_api_is_drive(size_t drive_nr, spacefs_drive_idx_t type)
+{
+    return drive_nr % 3 == (size_t)type;
+}
+
+/**
+ * Is the drive specified the right writing (non-backup) drive
+ * @param drive_nr Specified drive
+ * @return true if it is the right one
+ */
+bool spacefs_api_is_right_drive(size_t drive_nr) {
+    return spacefs_api_is_drive(drive_nr, right);
+}
+
+/**
+ * Is the drive specified the left writing (non-backup) drive
+ * @param drive_nr Specified drive
+ * @return true if it is the left one
+ */
+bool spacefs_api_is_left_drive(size_t drive_nr) {
+    return spacefs_api_is_drive(drive_nr, left);
+}
+
+/**
+ * Is the drive specified the backup drive
+ * @param drive_nr Specified drive
+ * @return true if it is the backup drive
+ */
+bool spacefs_api_is_backup_drive(size_t drive_nr) {
+    return spacefs_api_is_drive(drive_nr, backup);
+}
+
+/**
+ * Returns the index of the other eeprom in the eeprom tuple (when xor=enabled)
+ * @param drive_nr Index of the current eeprom
+ * @return index of the other eeprom to write to
+ */
+size_t spacefs_api_get_other_drive(size_t drive_nr) {
+    if(spacefs_api_is_backup_drive(drive_nr)) {
+        return -1;
+    }
+    if (spacefs_api_is_left_drive(drive_nr)){
+        return drive_nr + 1;
+    }
+    /* implicitly the right drive */
+    return drive_nr - 1;
+}
