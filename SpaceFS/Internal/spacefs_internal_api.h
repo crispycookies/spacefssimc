@@ -246,4 +246,12 @@ bool spacefs_api_is_left_drive(size_t drive_nr);
  */
 bool spacefs_api_is_backup_drive(size_t drive_nr);
 
+/**
+ * Calculates a^b
+ * @param[in,out] a
+ * @param b
+ * @param size The size of a and b, a and b must be the same size
+ */
+void spacefs_api_xor(uint8_t *a, const uint8_t *b, size_t size);
+
 #endif //SPACEFS_INTERNAL_API_H

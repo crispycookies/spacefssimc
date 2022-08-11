@@ -484,3 +484,14 @@ size_t spacefs_api_get_other_drive(size_t drive_nr) {
     /* implicitly the right drive */
     return drive_nr - 1;
 }
+
+/**
+ * Calculates a^b
+ * @param[in,out] a
+ * @param b
+ */
+void spacefs_api_xor(uint8_t *a, const uint8_t *b, size_t size) {
+    for (int i = 0; i < size; i++) {
+        a[i] ^= b[i];
+    }
+}
