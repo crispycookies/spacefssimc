@@ -149,6 +149,8 @@ spacefs_api_write_checked(spacefs_handle_t *handle, spacefs_address_t *address, 
     // TODO here
     spacefs_address_t other_eeprom = *address;
     spacefs_address_t backup_eeprom = *address;
+    size_t backup_nr = spacefs_api_get_backup_drive(drive_nr);
+    size_t other_nr = spacefs_api_get_other_drive(drive_nr);
 
     uint8_t rechecked[BURST_SIZE];
     memset(rechecked, 0, BURST_SIZE);
@@ -483,6 +485,22 @@ size_t spacefs_api_get_other_drive(size_t drive_nr) {
     }
     /* implicitly the right drive */
     return drive_nr - 1;
+}
+
+/**
+ * Gets the number of the backup drive belonging to drive_nr
+ * @param drive_nr The drive to get the backup drive for
+ * @return idx of the backup drive
+ */
+size_t spacefs_api_get_backup_drive(size_t drive_nr) {
+    if(spacefs_api_is_backup_drive(drive_nr)) {
+        return drive_nr;
+    }
+    if (spacefs_api_is_left_drive(drive_nr)){
+        return drive_nr + 2;
+    }
+    /* implicitly the right drive */
+    return drive_nr + 1;
 }
 
 /**

@@ -247,6 +247,12 @@ bool spacefs_api_is_left_drive(size_t drive_nr);
 bool spacefs_api_is_backup_drive(size_t drive_nr);
 
 /**
+ * Gets the number of the backup drive belonging to drive_nr
+ * @param drive_nr The drive to get the backup drive for
+ * @return idx of the backup drive
+ */
+size_t spacefs_api_get_backup_drive(size_t drive_nr);
+/**
  * Calculates a^b
  * @param[in,out] a
  * @param b
