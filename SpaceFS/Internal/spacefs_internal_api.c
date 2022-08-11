@@ -149,7 +149,10 @@ spacefs_api_write_checked(spacefs_handle_t *handle, spacefs_address_t *address, 
     size_t other_nr = spacefs_api_get_other_drive(drive_nr);
 
     uint8_t rechecked[BURST_SIZE];
+    uint8_t rechecked_backup[BURST_SIZE];
     memset(rechecked, 0, BURST_SIZE);
+    memset(rechecked_backup, 0, BURST_SIZE);
+
 
     spacefs_address_t tmp = *address;
     tmp += length;
@@ -161,15 +164,32 @@ spacefs_api_write_checked(spacefs_handle_t *handle, spacefs_address_t *address, 
     for (size_t i = 0; i < count; i++) {
         rc = sfs_helper_checked_write(handle, address, rechecked, &data[i * sizeof rechecked], sizeof rechecked,
                                       drive_nr);
-        // TODO drive nr
-        rc = spacefs_api_read(handle, &other_eeprom, rechecked, sizeof rechecked, drive_nr);
         if (rc != SPACEFS_OK) {
             (*address) = tmp;
             return rc;
         }
+        // TODO drive nr
+        rc = spacefs_api_read(handle, &other_eeprom, rechecked, sizeof rechecked, other_nr);
+        RETURN_PN_ERROR(rc);
+
+        spacefs_api_xor(rechecked, &data[i * sizeof rechecked], sizeof rechecked);
+
+        rc = sfs_helper_checked_write(handle, &backup_eeprom, rechecked_backup, rechecked, sizeof rechecked, backup_nr);
+        RETURN_PN_ERROR(rc);
     }
     if (mod != 0) {
         rc = sfs_helper_checked_write(handle, address, rechecked, &data[count * sizeof rechecked], mod, drive_nr);
+        if (rc != SPACEFS_OK) {
+            (*address) = tmp;
+            return rc;
+        }
+        // TODO drive nr
+        rc = spacefs_api_read(handle, &other_eeprom, rechecked, mod, other_nr);
+        RETURN_PN_ERROR(rc);
+
+        spacefs_api_xor(rechecked, &data[count * sizeof rechecked], mod);
+
+        rc = sfs_helper_checked_write(handle, &backup_eeprom, rechecked_backup, rechecked, mod, backup_nr);
     }
     (*address) = tmp;
     return rc;
