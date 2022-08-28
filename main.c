@@ -71,11 +71,11 @@ int main() {
     handle.xor_enable = true;
     handle.readback_enable = true;
 
-    if (spacefs_basic_format(&handle, 0) != SPACEFS_OK) {
+    if (spacefs_basic_format(&handle, 1) != SPACEFS_OK) {
         printf("Error formatting EEPROM 0!\n");
         return 1;
     }
-    if (spacefs_basic_format(&handle, 1) != SPACEFS_OK) {
+    if (spacefs_basic_format(&handle, 2) != SPACEFS_OK) {
         printf("Error formatting EEPROM 1!\n");
         return 1;
     }
@@ -83,13 +83,13 @@ int main() {
     int d = O_RDWR;
     int e = c | d;
     int f = O_RING;
-    fd_t fd = spacefs_fopen(&handle, 0, "test.txt", O_CREAT | O_RDWR);
+    fd_t fd = spacefs_fopen(&handle, 1, "test.txt", O_CREAT | O_RDWR);
     if (fd.fp == -1) {
         printf("Error opening file!\n");
         return 1;
     }
 
-    fd_t fd2 = spacefs_fopen(&handle, 1, "test2.txt", O_CREAT | O_RDWR);
+    fd_t fd2 = spacefs_fopen(&handle, 2, "test2.txt", O_CREAT | O_RDWR);
     if (fd2.fp == -1) {
         printf("Error opening file!\n");
         return 1;
@@ -102,6 +102,11 @@ int main() {
 
     spacefs_status_t write = spacefs_fwrite(&fd, buffer, sizeof buffer);
     if (write != SPACEFS_OK) {
+        while(true);
+    }
+    memset(buffer, '1', sizeof buffer);
+    spacefs_status_t test = spacefs_fwrite(&fd2, buffer, sizeof buffer);
+    if (test != SPACEFS_OK) {
         while(true);
     }
     spacefs_status_t write2 = spacefs_fread(&fd, read_buffer, sizeof read_buffer);

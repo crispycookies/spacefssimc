@@ -513,10 +513,10 @@ size_t spacefs_api_get_backup_drive(size_t drive_nr) {
         return drive_nr;
     }
     if (spacefs_api_is_left_drive(drive_nr)){
-        return drive_nr + 2;
+        return drive_nr - 1;
     }
     /* implicitly the right drive */
-    return drive_nr + 1;
+    return drive_nr - 2;
 }
 
 /**

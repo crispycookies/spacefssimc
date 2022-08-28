@@ -25,7 +25,7 @@ static spacefs_status_t spacefs_write_ringbuffer_internal(fd_t *fd, uint8_t *dat
 
 static void sfs_calculate_discovery_block_crc(discovery_block_t *discovery_block) {
     uint32_t checksum = crc_32((unsigned char *) (&discovery_block->max_filename_length),
-                      sizeof(discovery_block->max_filename_length));
+                               sizeof(discovery_block->max_filename_length));
 
     /* I am not proud of this spaghetti code here and everywhere in this FS */
     /* but I prefer this explicit approach over casting discovery_block_t and subtracting */
@@ -731,16 +731,19 @@ static spacefs_status_t spacefs_fread_internal(fd_t fd, uint8_t *data, size_t si
             }
 
             if (byte_offset != 0) {
-                rc = spacefs_api_read_crc_throwaway_data(fd.handle, &block_addr, byte_offset, fd.drive_nr, &data_checksum);
+                rc = spacefs_api_read_crc_throwaway_data(fd.handle, &block_addr, byte_offset, fd.drive_nr,
+                                                         &data_checksum);
                 RETURN_CUSTOM_ERROR(rc, SPACEFS_MATCH)
             }
 
-            rc = spacefs_api_read_crc(fd.handle, &block_addr, &data[offset], bytes_to_read, fd.drive_nr, &data_checksum);
+            rc = spacefs_api_read_crc(fd.handle, &block_addr, &data[offset], bytes_to_read, fd.drive_nr,
+                                      &data_checksum);
             RETURN_PN_ERROR(rc)
 
             if ((bytes_to_read + byte_offset) < fd.handle->block_size) {
                 size_t remaining_bytes = fd.handle->block_size - (bytes_to_read + byte_offset);
-                rc = spacefs_api_read_crc_throwaway_data(fd.handle, &block_addr, remaining_bytes, fd.drive_nr, &data_checksum);
+                rc = spacefs_api_read_crc_throwaway_data(fd.handle, &block_addr, remaining_bytes, fd.drive_nr,
+                                                         &data_checksum);
                 RETURN_CUSTOM_ERROR(rc, SPACEFS_MATCH)
             }
 
@@ -944,7 +947,7 @@ spacefs_status_t spacefs_verify_integrity(spacefs_handle_t *handle, size_t drive
     spacefs_status_t rc = spacefs_api_check_handle(handle);
     RETURN_PN_ERROR(rc)
 
-    rc = spacefs_api_read(handle, &address, (uint8_t*)&dt, sizeof(dt), drive_nr);
+    rc = spacefs_api_read(handle, &address, (uint8_t *) &dt, sizeof(dt), drive_nr);
     RETURN_PN_ERROR(rc);
 
     crc = dt.checksum;
