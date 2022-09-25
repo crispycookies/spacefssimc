@@ -73,6 +73,8 @@ static uint32_t sfs_calculate_crc_fileblock_no_file(file_block_t *file_block) {
                              sizeof(file_block->nr_blocks));
     checksum = append_crc_32(checksum, (unsigned char *) (&file_block->filename_length),
                              sizeof(file_block->filename_length));
+    checksum = append_crc_32(checksum, (unsigned char *) (&file_block->name_checksum),
+                             sizeof(file_block->name_checksum));
     return checksum;
 }
 
@@ -85,21 +87,21 @@ static uint32_t sfs_calculate_crc_fileblock(file_block_t *file_block, const char
 
 static spacefs_status_t
 sfs_write_file_block(spacefs_handle_t *handle, size_t drive_nr, uint32_t *address, size_t idx, const char *filename,
-                     size_t filename_length) {
+                     size_t filename_length, uint32_t filename_checksum) {
     file_block_t file_block;
-    uint32_t checksum;
-
     memset(&file_block, 0, sizeof(file_block_t));
     file_block.filename_length = filename_length;
     file_block.index = idx;
+    file_block.name_checksum = filename_checksum;
 
     file_block.checksum = sfs_calculate_crc_fileblock(&file_block, filename);
 
     return spacefs_api_write_checked(handle, address, (uint8_t *) &file_block, sizeof(file_block_t), drive_nr);
 }
 
-static spacefs_status_t sfs_write_filename(spacefs_handle_t *handle, size_t drive_nr, spacefs_address_t *address,
-                                           const char *filename, size_t filename_length) {
+static spacefs_status_t
+sfs_write_filename(spacefs_handle_t *handle, size_t drive_nr, spacefs_address_t *address, const char *filename,
+                   size_t filename_length, uint32_t *crc) {
     if (filename_length == 0) {
         return spacefs_api_memset(handle, address, 0x00, handle->max_filename_length, drive_nr);
     } else {
@@ -107,7 +109,7 @@ static spacefs_status_t sfs_write_filename(spacefs_handle_t *handle, size_t driv
 
         spacefs_status_t rc = spacefs_api_memset(handle, address, 0x00, handle->max_filename_length, drive_nr);
         RETURN_PN_ERROR(rc)
-        return spacefs_api_write_checked(handle, &address_tmp, (uint8_t *) filename, filename_length, drive_nr);
+        return spacefs_api_write_checked_crc(handle, &address_tmp, (uint8_t *) filename, filename_length, crc, drive_nr);
     }
 }
 
@@ -115,13 +117,15 @@ static spacefs_status_t
 sfs_write_file_table_entry(spacefs_handle_t *handle, size_t drive_nr, uint8_t index, const char *filename,
                            uint32_t filesize,
                            uint32_t *address) {
-    spacefs_status_t rc = sfs_write_file_block(handle, drive_nr, address, index, filename, filesize);
-    if (rc != SPACEFS_OK) {
-        (*address) = (*address) + handle->max_filename_length;
-        return rc;
-    }
+    uint32_t crc = 0;
+    uint32_t address_after_fileblock = (*address) + sizeof(file_block_t);
 
-    return sfs_write_filename(handle, drive_nr, address, filename, filesize);
+    spacefs_status_t rc = sfs_write_filename(handle, drive_nr, &address_after_fileblock, filename, filesize, &crc);
+    RETURN_PN_ERROR(rc)
+
+    rc = sfs_write_file_block(handle, drive_nr, address, index, filename, filesize, crc);
+    address += address_after_fileblock;
+    return rc;
 }
 
 /**
@@ -256,6 +260,9 @@ fd_t spacefs_fopen(spacefs_handle_t *handle, size_t drive_nr, char *filename, mo
     if (sfs_find_filename(handle, drive_nr, &tmp_address, filename, strlen(filename), &idx) == SPACEFS_MATCH) {
         return sfs_open(handle, drive_nr, &address, filename, strlen(filename), idx, mode, true);
     } else {
+        if (!(mode & O_CREAT)) {
+            return INVALID_FP;
+        }
         tmp_address = address;
         if (sfs_find_filename(handle, drive_nr, &tmp_address, 0, 0, &idx) == SPACEFS_MISMATCH) {
             // ERROR! No Name Slot left!
@@ -355,9 +362,8 @@ sfs_link_block(spacefs_handle_t *handle, size_t drive_nr, spacefs_address_t *blo
     checksum = sfs_calculate_crc_block(&block_prev_read);
     block_prev_read.checksum = checksum;
 
-    rc = spacefs_api_write_checked(handle, &block_prev_write, (uint8_t *) &block_prev_read, sizeof(block_t),
+    return spacefs_api_write_checked(handle, &block_prev_write, (uint8_t *) &block_prev_read, sizeof(block_t),
                                    drive_nr);
-    RETURN_PN_ERROR(rc)
 }
 
 /**

@@ -67,6 +67,7 @@ typedef struct {
     uint32_t nr_blocks;
     uint32_t filename_length;
     uint32_t checksum;
+    uint32_t name_checksum;
 } file_block_t;
 
 typedef struct {
