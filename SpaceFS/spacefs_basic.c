@@ -282,13 +282,40 @@ static size_t get_block_in_byte(uint8_t byte) {
     return 0;
 }
 
+static spacefs_status_t sfs_check_block_table(spacefs_handle_t *handle, size_t drive_nr, spacefs_address_t address, size_t *fat_entries) {
+    uint32_t crc_calc = 0;
+    uint32_t crc_read = 0;
+    spacefs_status_t rc;
+    (*fat_entries) = handle->block_count / 8;
+    if (handle->block_count % 8 != 0) {
+        (*fat_entries)++;
+    }
+
+    /* base address + fat-entries = crc address */
+    rc = spacefs_api_read_crc_throwaway_data(handle, &address, *fat_entries, drive_nr, &crc_calc);
+    RETURN_PN_ERROR(rc)
+
+    rc = spacefs_api_read(handle, &address, (uint8_t*)&crc_read, sizeof crc_read, drive_nr);
+    RETURN_PN_ERROR(rc)
+
+    if (crc_read != crc_calc) {
+        return SPACEFS_CHECKSUM;
+    }
+    return rc;
+}
+
 static spacefs_status_t
 sfs_set_unused_block(spacefs_handle_t *handle, size_t drive_nr, spacefs_address_t *address, size_t *block_nr) {
+    spacefs_address_t address_crc = *address;
     spacefs_status_t rc;
-    size_t fat_entries = handle->block_count / 8;
-    if (handle->block_count % 8 != 0) {
-        fat_entries++;
-    }
+    uint32_t crc_calc = 0;
+    size_t fat_entries;
+
+    rc = sfs_check_block_table(handle, drive_nr, *address, &fat_entries);
+    RETURN_PN_ERROR(rc)
+
+    /* reset address */
+    *address = address_crc;
 
     for (size_t i = 0; i < fat_entries; i++) {
         uint8_t fat_entry = 0xFF;
@@ -304,6 +331,12 @@ sfs_set_unused_block(spacefs_handle_t *handle, size_t drive_nr, spacefs_address_
             rc = spacefs_api_write_checked(handle, &tmp_address, &fat_entry, 1, drive_nr);
             RETURN_PN_ERROR(rc)
 
+            rc = spacefs_api_read_crc_throwaway_data(handle, &address_crc, fat_entries, drive_nr, &crc_calc);
+            RETURN_PN_ERROR(rc)
+
+            rc = spacefs_api_write_checked(handle, &address_crc, (uint8_t*)&crc_calc, sizeof crc_calc, drive_nr);
+            RETURN_PN_ERROR(rc)
+
             return SPACEFS_BLOCK_FOUND;
         }
     }
@@ -315,19 +348,34 @@ sfs_unset_used_block(spacefs_handle_t *handle, size_t drive_nr, spacefs_address_
     if (block_nr >= handle->block_count) {
         return SPACEFS_ERROR;
     }
+    uint32_t crc_read = 0;
+    spacefs_address_t address_crc = *address;
     spacefs_address_t fat_entry_address = (*address) + block_nr / 8;
     spacefs_address_t fat_entry_address_wb = fat_entry_address;
 
     uint8_t fat_entry_shift = block_nr % 8;
     uint8_t fat_entry = 0xFF;
+    size_t fat_entries = 0;
 
-    spacefs_status_t rc = spacefs_api_read(handle, &fat_entry_address, &fat_entry, 1, drive_nr);
+    /* check if the checksum was valid before writing to FS */
+    spacefs_status_t rc = sfs_check_block_table(handle, drive_nr, *address, &fat_entries);
+    RETURN_PN_ERROR(rc)
+
+    /* reset address */
+    *address = address_crc;
+
+    rc = spacefs_api_read(handle, &fat_entry_address, &fat_entry, 1, drive_nr);
     RETURN_PN_ERROR(rc)
 
     fat_entry &= ~(1 << fat_entry_shift);
     rc = spacefs_api_write_checked(handle, &fat_entry_address_wb, &fat_entry, 1, drive_nr);
 
-    return rc;
+    rc = spacefs_api_read_crc_throwaway_data(handle, &address_crc, fat_entries, drive_nr, &crc_read);
+    RETURN_PN_ERROR(rc);
+
+    *address = address_crc;
+
+    return spacefs_api_write_checked(handle, address, (uint8_t*)&crc_read, 1, drive_nr);
 }
 
 static spacefs_address_t

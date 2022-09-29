@@ -328,7 +328,7 @@ spacefs_api_get_block_address(spacefs_handle_t *handle, const spacefs_address_t 
 
 spacefs_address_t
 spacefs_api_get_fat_address(spacefs_handle_t *handle, const spacefs_address_t *file_area_begin) {
-   return spacefs_api_get_file_address(handle, file_area_begin, handle->max_file_number);
+    return spacefs_api_get_file_address(handle, file_area_begin, handle->max_file_number);
 }
 
 spacefs_address_t spacefs_api_get_file_area_begin(spacefs_address_t start) {
@@ -340,7 +340,7 @@ spacefs_address_t spacefs_api_get_block_area_begin(spacefs_handle_t *handle, spa
     if (handle->block_count % 8) {
         fat_add++;
     }
-    return fat_add + fat_begin_address;
+    return fat_add + fat_begin_address + sizeof (uint32_t);
 }
 
 spacefs_tuple_t spacefs_api_get_address_tuple(fd_t *fd, spacefs_address_t start_address) {

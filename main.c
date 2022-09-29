@@ -65,8 +65,8 @@ int main() {
     handle.low_level_handle = eeproms;
     handle.max_file_number = 2;
     handle.max_filename_length = 10;
-    handle.block_count = 128;
-    handle.block_size = 64;
+    handle.block_count = 8;
+    handle.block_size = 10;
     handle.device_size = 1410065408;
     handle.xor_enable = true;
     handle.readback_enable = true;
@@ -95,8 +95,8 @@ int main() {
         return 1;
     }
 
-    uint8_t buffer[300];
-    uint8_t read_buffer[300];
+    uint8_t buffer[20];
+    uint8_t read_buffer[20];
     memset(buffer, 'Y', sizeof buffer);
     memset(read_buffer, 0, sizeof read_buffer);
 
