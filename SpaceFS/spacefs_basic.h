@@ -37,7 +37,7 @@ static const fd_t INVALID_FP = {-1, 0, 0, 0, NULL, 0};
 #define O_READ   0x0001
 #define O_WRITE  (O_READ << 1)
 #define O_RDWR   (O_READ | O_WRITE)
-#define O_CREAT  (O_RDWR << 1)
+#define O_CREAT  (O_WRITE << 1)
 #define O_RING   (O_CREAT << 1)
 #define O_IGNORE_CRC (O_RING << 1)
 

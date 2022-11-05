@@ -763,7 +763,7 @@ static spacefs_status_t spacefs_fread_internal(fd_t fd, uint8_t *data, size_t si
         uint32_t data_checksum = 0;
         spacefs_address_t block_addr = spacefs_api_get_block_address(fd.handle, &addresses.block_area_begin_address,
                                                                      next_block);
-        rc = spacefs_api_read(fd.handle, &block_addr, (uint8_t *) &bt, sizeof bt, fd.fp);
+        rc = spacefs_api_read(fd.handle, &block_addr, (uint8_t *) &bt, sizeof bt, fd.drive_nr);
         RETURN_PN_ERROR(rc)
 
         checksum = sfs_calculate_crc_block(&bt);

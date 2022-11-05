@@ -67,7 +67,7 @@ int main() {
     handle.max_filename_length = 10;
     handle.block_count = 8;
     handle.block_size = 10;
-    handle.device_size = 1410065408;
+    handle.device_size = 2000;
     handle.xor_enable = true;
     handle.readback_enable = true;
 
