@@ -159,7 +159,7 @@ spacefs_address_t spacefs_api_get_block_area_begin(spacefs_handle_t *handle, spa
 spacefs_address_t
 spacefs_api_get_fat_address(spacefs_handle_t *handle, const spacefs_address_t *file_area_begin);
 
-spacefs_tuple_t spacefs_api_get_address_tuple(fd_t *handle, spacefs_address_t start_address);
+spacefs_tuple_t spacefs_api_get_address_tuple(fd_t *fd);
 
 /**
  * Calculates the maximum size to be written into one block

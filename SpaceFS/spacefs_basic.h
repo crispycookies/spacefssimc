@@ -109,6 +109,14 @@ spacefs_status_t spacefs_create_ringbuffer(fd_t fd, size_t size, char *filename)
  */
 spacefs_status_t spacefs_verify_integrity(spacefs_handle_t *handle, size_t drive_nr);
 
+/**
+ * Checks everything, except the files.
+ * @param handle
+ * @param driver_nr
+ * @return
+ */
+spacefs_status_t spacefs_veryify_internals(spacefs_handle_t *handle, size_t driver_nr);
+
 #ifdef __cplusplus
 }
 #endif

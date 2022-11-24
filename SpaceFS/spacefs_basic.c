@@ -583,7 +583,7 @@ sfs_update_size(spacefs_handle_t *handle, size_t drive_nr, spacefs_address_t fb_
  * @return error code
  */
 static spacefs_status_t spacefs_fwrite_internal(fd_t fd, uint8_t *data, size_t size) {
-    spacefs_tuple_t addresses = spacefs_api_get_address_tuple(&fd, 0);
+    spacefs_tuple_t addresses = spacefs_api_get_address_tuple(&fd);
 
     size_t block_count_to_use = (size + fd.offset_read) / (fd.handle->block_size);
     if ((size + fd.offset_read) % (fd.handle->block_size) != 0) {
@@ -735,7 +735,7 @@ static bool spacefs_check_crc(mode_t mode) {
  * @return error code
  */
 static spacefs_status_t spacefs_fread_internal(fd_t fd, uint8_t *data, size_t size) {
-    spacefs_tuple_t addresses = spacefs_api_get_address_tuple(&fd, 0);
+    spacefs_tuple_t addresses = spacefs_api_get_address_tuple(&fd);
 
     file_block_t fb;
     spacefs_status_t rc = spacefs_api_read(fd.handle, &addresses.file_idx_address, (uint8_t *) &fb, sizeof fb,
@@ -1009,4 +1009,74 @@ spacefs_status_t spacefs_verify_integrity(spacefs_handle_t *handle, size_t drive
     sfs_calculate_discovery_block_crc(&dt);
 
     return crc == dt.checksum ? SPACEFS_OK : SPACEFS_CHECKSUM;
+}
+
+/**
+ * Matches the written checksum with a calculated one in order to detect errors
+ * @param handle The spacefs handle
+ * @param address The address
+ * @param drive_nr The drive to use
+ * @return Whether the checksum matched or not.
+ */
+static spacefs_status_t
+spacefs_api_check_discovery(spacefs_handle_t *handle, spacefs_address_t *address, size_t drive_nr,
+                            discovery_block_t *disco) {
+    uint32_t temp_crc = 0;
+    spacefs_status_t rc = spacefs_api_read(handle, address, (uint8_t*)disco, sizeof(discovery_block_t), drive_nr);
+    RETURN_PN_ERROR(rc)
+
+    temp_crc = disco->checksum;
+    sfs_calculate_discovery_block_crc(disco);
+
+    return disco->checksum == temp_crc ? SPACEFS_OK : SPACEFS_CHECKSUM;
+}
+
+/**
+ * Tries to restore data by a = b^c. Does not check if the result is flawless though.
+ * @param handle The handle
+ * @param address The memory address of the discovery block
+ * @param drive_nr The drive nr of the drive to repair
+ * @return Whether it could restore data.
+ */
+static spacefs_status_t spacefs_api_repair_discovery(spacefs_handle_t *handle, spacefs_address_t *address, size_t drive_nr) {
+    uint8_t disco_backup[sizeof(discovery_block_t)];
+    uint8_t disco_data[sizeof(discovery_block_t)];
+
+    spacefs_address_t address_backup = *address;
+    spacefs_address_t address_data = *address;
+
+    size_t idx_backup = spacefs_api_get_backup_drive(drive_nr);
+    size_t idx_data = spacefs_api_get_other_drive(drive_nr);
+
+    spacefs_status_t rc = spacefs_api_check_discovery(handle, &address_data, idx_data, (discovery_block_t *)disco_data);
+    RETURN_PN_ERROR(rc)
+
+    rc = spacefs_api_read(handle, &address_backup, disco_backup, sizeof disco_backup, idx_backup);
+    RETURN_PN_ERROR(rc)
+
+    spacefs_api_xor(disco_data, disco_backup, sizeof(discovery_block_t));
+
+    return spacefs_api_write_checked(handle, address, disco_data, sizeof(discovery_block_t), drive_nr);
+}
+
+spacefs_status_t spacefs_api_check_filetable(spacefs_handle_t *handle, spacefs_address_t *address, size_t drive_nr) {
+    return SPACEFS_ERROR;
+}
+
+spacefs_status_t spacefs_veryify_internals(spacefs_handle_t *handle, size_t drive_nr) {
+    spacefs_address_t address = 0;
+    spacefs_status_t rc = spacefs_api_check_handle(handle);
+    RETURN_PN_ERROR(rc)
+
+    discovery_block_t disco;
+    rc = spacefs_api_check_discovery(handle, &address, drive_nr, &disco);
+    RETURN_PN_ERROR(rc)
+
+    rc = sfs_write_file_table(handle, drive_nr, &address);
+    RETURN_PN_ERROR(rc)
+
+    rc = sfs_write_fat(handle, drive_nr, &address);
+    RETURN_PN_ERROR(rc)
+
+    return sfs_initialize_blocks(handle, drive_nr, &address);
 }

@@ -343,7 +343,7 @@ spacefs_address_t spacefs_api_get_block_area_begin(spacefs_handle_t *handle, spa
     return fat_add + fat_begin_address + sizeof (uint32_t);
 }
 
-spacefs_tuple_t spacefs_api_get_address_tuple(fd_t *fd, spacefs_address_t start_address) {
+spacefs_tuple_t spacefs_api_get_address_tuple(fd_t *fd) {
     spacefs_tuple_t tuple;
     tuple.file_area_begin = spacefs_api_get_file_area_begin(0);
     tuple.fat_address = spacefs_api_get_fat_address(fd->handle, &tuple.file_area_begin);
